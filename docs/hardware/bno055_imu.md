@@ -20,27 +20,18 @@ The BNO055 provides absolute orientation, heading, and rotation rate. This data 
 
 ---
 
-## Connection to ESP32-S3
+## Wiring — Current Connections (from spec)
 
-| BNO055 Pin | ESP32-S3 Pin | Notes |
-|---|---|---|
-| VIN | 3.3V | Do not use 5V |
-| GND | GND | Shared common ground |
-| SDA | I2C SDA | 4.7 kΩ pull-up to 3.3V |
-| SCL | I2C SCL | 4.7 kΩ pull-up to 3.3V |
-| ADR | GND | Sets I2C address to 0x28 |
-| INT | Optional GPIO | Interrupt on data ready |
+Connected to **ESP32-S3 via I2C** (ESP32 hosts the I2C bus).
 
----
+```
+ESP32-S3 I2C Bus
+└── BNO055  — IMU
+```
 
-## I2C Address
+Shares common ground with ESP32, TB6612, Pi, and battery −.
 
-| ADR Pin | I2C Address |
-|---|---|
-| GND (default) | 0x28 |
-| 3.3V | 0x29 |
-
-If two BNO055 units are needed, use both addresses.
+> Specific SDA/SCL GPIO pins and I2C address are TBD — to be documented when firmware is written.
 
 ---
 

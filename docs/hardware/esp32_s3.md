@@ -36,34 +36,40 @@ The ESP32-S3 is the embedded base controller. It runs independently of ROS and t
 
 ---
 
-## I2C Bus (ESP32-S3 hosted)
+## Wiring — Current Connections (from spec)
+
+| Connects To | Interface | Purpose |
+|---|---|---|
+| Raspberry Pi 5 | USB Serial | Command/telemetry bridge |
+| TB6612FNG | GPIO / PWM | Motor direction + speed control |
+| Wheel encoders | GPIO (interrupts) | Odometry tick counting |
+| BNO055 | I2C (ESP32 hosted) | IMU |
+| INA219 | I2C (ESP32 hosted) | Battery monitor |
+| BME680 | I2C (ESP32 hosted) | Environmental sensor |
+
+### I2C Bus
 
 ```
-ESP32-S3 I2C
-├── BNO055  — IMU          (addr: 0x28 or 0x29)
-├── INA219  — Battery      (addr: 0x40–0x4F configurable)
-└── BME680  — Environment  (addr: 0x76 or 0x77)
+ESP32-S3 I2C Bus
+├── INA219  — Battery monitor
+├── BNO055  — IMU
+└── BME680  — Environmental sensor
 ```
 
-Pull-up resistors (4.7 kΩ) required on SDA and SCL lines.
+### Common Ground
 
----
+The ESP32 GND must connect to: Battery −, Pi GND, TB6612 GND, and all sensor GNDs.
 
-## Motor Control Pins (TB6612FNG)
+### Motor Direction (TB6612FNG — from spec)
 
-| Signal | Description |
-|---|---|
-| AIN1, AIN2 | Left motor direction |
-| BIN1, BIN2 | Right motor direction |
-| PWMA | Left motor speed |
-| PWMB | Right motor speed |
-| STBY | Standby (pull HIGH to enable) |
+| IN1 | IN2 | State |
+|---|---|---|
+| HIGH | LOW | Forward |
+| LOW | HIGH | Reverse |
+| HIGH | HIGH | Brake |
+| LOW | LOW | Coast |
 
----
-
-## Encoder Pins
-
-Quadrature encoders connected to GPIO pins supporting hardware interrupts. Use `attachInterrupt()` on both A and B channels per wheel for direction-aware counting.
+> Specific GPIO pin assignments are TBD — to be documented when firmware is written.
 
 ---
 

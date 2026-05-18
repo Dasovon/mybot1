@@ -22,25 +22,18 @@ The BME680 provides ambient environmental data published by the ESP32 as telemet
 
 ---
 
-## Connection to ESP32-S3
+## Wiring — Current Connections (from spec)
 
-| BME680 Pin | Connects To | Notes |
-|---|---|---|
-| VCC | 3.3V | Logic and sensor supply |
-| GND | Common GND | Shared ground |
-| SDA | ESP32 I2C SDA | 4.7 kΩ pull-up |
-| SCL | ESP32 I2C SCL | 4.7 kΩ pull-up |
-| SDO | GND | Sets I2C address to 0x76 |
-| CS | 3.3V or NC | Pull HIGH to force I2C mode |
+Connected to **ESP32-S3 via I2C** (ESP32 hosts the I2C bus).
 
----
+```
+ESP32-S3 I2C Bus
+└── BME680  — Environmental sensor
+```
 
-## I2C Address
+Shares common ground with ESP32, TB6612, Pi, and battery −.
 
-| SDO Pin | Address |
-|---|---|
-| GND | 0x76 (default) |
-| VCC | 0x77 |
+> Specific SDA/SCL GPIO pins and I2C address are TBD.
 
 ---
 

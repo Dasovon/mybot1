@@ -20,14 +20,16 @@ Update this file with your specific model once confirmed.
 
 ---
 
-## Connection
+## Wiring — Current Connections (from spec)
+
+Connected to **Raspberry Pi 5 via USB**.
 
 | Interface | Details |
 |---|---|
-| Physical | USB (via onboard USB-serial adapter) |
-| Connected to | Raspberry Pi 5 USB port |
-| Device path | `/dev/rplidar` (via udev rule) or `/dev/ttyUSBx` |
-| Baud rate | 115200 (A1/A2) or 256000 (A3/S/C series) |
+| Physical | USB |
+| Connected to | Raspberry Pi 5 |
+
+> Specific USB port, device path, and baud rate are TBD — depends on RPLIDAR model (not yet specified in spec).
 
 ---
 

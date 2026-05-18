@@ -34,15 +34,20 @@ The Raspberry Pi 5 is the onboard compute node. It acts as the sensor bridge bet
 
 ---
 
-## USB Device Assignments
+## Wiring — Current Connections (from spec)
 
-| Device | Interface | Expected Path |
+| Connects To | Interface | Purpose |
 |---|---|---|
-| ESP32-S3 | USB CDC serial | `/dev/ttyACM0` or `/dev/ttyUSB0` |
-| RPLIDAR | USB serial | `/dev/ttyUSB0` or `/dev/ttyUSB1` |
-| RealSense D435 | USB 3.0 | Managed by librealsense / udev |
+| ESP32-S3 | USB Serial | Command/telemetry bridge |
+| RPLIDAR | USB | 2D LiDAR data |
+| RealSense D435 | USB | RGB-D depth camera |
+| Development PC | Wi-Fi or Ethernet | ROS 2 network |
 
-> Use udev rules to assign stable device names (e.g., `/dev/esp32`, `/dev/rplidar`).
+### Common Ground
+
+Pi GND must connect to: Battery −, ESP32 GND, TB6612 GND, and all sensor GNDs.
+
+> Specific USB port assignments (which port hosts which device) are TBD.
 
 ---
 

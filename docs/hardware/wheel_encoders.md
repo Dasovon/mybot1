@@ -14,18 +14,19 @@ Quadrature encoders (2-channel, A + B per wheel) provide:
 
 ---
 
-## Connections to ESP32-S3
+## Wiring — Current Connections (from spec)
 
-| Signal | Description | ESP32 Pin Requirement |
-|---|---|---|
-| Left A | Left encoder channel A | Hardware interrupt capable GPIO |
-| Left B | Left encoder channel B | Hardware interrupt capable GPIO |
-| Right A | Right encoder channel A | Hardware interrupt capable GPIO |
-| Right B | Right encoder channel B | Hardware interrupt capable GPIO |
-| VCC | Encoder power | 3.3V or 5V (check encoder spec) |
-| GND | Common ground | Shared GND |
+Connected to **ESP32-S3** via GPIO (hardware interrupts).
 
-All ESP32-S3 GPIO pins support interrupts, but avoid strapping pins.
+| Signal | Connects To |
+|---|---|
+| Left encoder | ESP32-S3 GPIO |
+| Right encoder | ESP32-S3 GPIO |
+| GND | Common GND |
+
+Shares common ground with ESP32, TB6612, Pi, and battery −.
+
+> Specific GPIO pin assignments, encoder voltage level, and channel count (A only vs A+B quadrature) are TBD.
 
 ---
 

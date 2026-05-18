@@ -20,35 +20,27 @@ The TB6612FNG drives both DC motors using PWM signals from the ESP32-S3. It hand
 
 ---
 
-## Pin Connections to ESP32-S3
+## Wiring — Current Connections (from spec)
 
-| TB6612FNG Pin | Connects To | Description |
+| TB6612FNG Pin | Connects To | Notes |
 |---|---|---|
-| PWMA | ESP32 GPIO (PWM) | Left motor speed |
-| AIN1 | ESP32 GPIO | Left motor direction bit 1 |
-| AIN2 | ESP32 GPIO | Left motor direction bit 2 |
-| PWMB | ESP32 GPIO (PWM) | Right motor speed |
-| BIN1 | ESP32 GPIO | Right motor direction bit 1 |
-| BIN2 | ESP32 GPIO | Right motor direction bit 2 |
-| STBY | ESP32 GPIO (pull HIGH) | Standby — HIGH = enabled |
-| GND | Common GND | Must share ground with ESP32 and battery |
-| VM | Battery positive | Motor power supply |
-| VCC | 3.3V or 5V | Logic supply from ESP32 board |
-| AO1, AO2 | Left motor terminals | Motor A output |
-| BO1, BO2 | Right motor terminals | Motor B output |
+| Control pins (IN1/IN2/PWM) | ESP32-S3 GPIO | Specific GPIO TBD |
+| GND | Common GND | Battery −, ESP32 GND, Pi GND, sensor GND all shared |
+| VM | Battery positive | Motor supply voltage |
+| VCC | ESP32 board 3.3V or 5V | Logic supply |
+| AO1, AO2 | Left motor terminals | — |
+| BO1, BO2 | Right motor terminals | — |
 
----
+### Motor Direction Logic (from spec)
 
-## Motor Direction Logic
-
-| AIN1 | AIN2 | Motor State |
+| IN1 | IN2 | State |
 |---|---|---|
 | HIGH | LOW | Forward |
 | LOW | HIGH | Reverse |
 | HIGH | HIGH | Brake |
 | LOW | LOW | Coast |
 
-Same logic applies to BIN1/BIN2 for the right motor.
+Applies to both motor channels (A = left, B = right).
 
 ---
 

@@ -25,41 +25,22 @@ The battery monitor operates **independently of ROS, Wi-Fi, and the development 
 
 ---
 
-## Connection to ESP32-S3
+## Wiring — Current Connections (from spec)
 
-| INA219 Pin | Connects To | Notes |
-|---|---|---|
-| VCC | 3.3V | Logic supply |
-| GND | Common GND | Shared ground |
-| SDA | ESP32 I2C SDA | 4.7 kΩ pull-up |
-| SCL | ESP32 I2C SCL | 4.7 kΩ pull-up |
-| VIN+ | Battery positive (after shunt) | High-side current sense |
-| VIN- | Load side of shunt | To motor driver and Pi supply |
+Connected to **ESP32-S3 via I2C** (ESP32 hosts the I2C bus).
 
----
+```
+ESP32-S3 I2C Bus
+└── INA219  — Battery monitor
+```
 
-## I2C Address Configuration
+The INA219 also sits in the battery current path:
+- VIN+ → battery positive (or after fuse)
+- VIN- → load (motors, Pi supply, etc.)
 
-| A1 | A0 | Address |
-|---|---|---|
-| GND | GND | 0x40 (default) |
-| GND | VCC | 0x41 |
-| VCC | GND | 0x44 |
-| VCC | VCC | 0x45 |
+Shares common ground with ESP32, TB6612, Pi, and battery −.
 
----
-
-## Shunt Resistor Selection
-
-The shunt resistor value determines current measurement range:
-
-| Shunt Resistance | Max Current (at 320mV) |
-|---|---|
-| 0.1Ω | 3.2A |
-| 0.05Ω | 6.4A |
-| 0.01Ω | 32A |
-
-Choose shunt value based on expected peak current draw. Use low-inductance current sense resistors.
+> Specific SDA/SCL GPIO pins, I2C address, and shunt resistor value are TBD.
 
 ---
 

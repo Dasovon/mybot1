@@ -25,15 +25,16 @@ The RealSense D435 provides RGB-D (color + depth) data used for:
 
 ---
 
-## Connection
+## Wiring — Current Connections (from spec)
+
+Connected to **Raspberry Pi 5 via USB**.
 
 | Interface | Details |
 |---|---|
-| Physical | USB 3.0 (must be USB 3.0, not 2.0) |
-| Connected to | Raspberry Pi 5 USB 3.0 port |
-| Driver | librealsense2 + realsense2_camera ROS 2 wrapper |
+| Physical | USB |
+| Connected to | Raspberry Pi 5 |
 
-> The D435 requires USB 3.0 bandwidth. Connecting to a USB 2.0 port will cause reduced frame rates or failure.
+> Note: The D435 requires USB 3.0 bandwidth — must use a USB 3.0 port on the Pi 5 (not USB 2.0).
 
 ---
 
