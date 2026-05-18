@@ -16,7 +16,7 @@ A distributed ROS 2 autonomous mobile robot (AMR) built on a proven hardware sta
 |---|---|
 | Power | RPI5 PD Power Hat P01 (9–24V in → 5V/8A USB PD) |
 | Compute | Raspberry Pi 5 |
-| Microcontroller | ESP32-S3-DevKitC-1 on expansion base |
+| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board |
 | Motor driver | Adafruit TB6612FNG |
 | Motors + encoders | JGA25-371 DC 12V, 45:1, 1010 CPR |
 | IMU | Adafruit BNO055 (I2C 0x28) |

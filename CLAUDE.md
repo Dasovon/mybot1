@@ -22,7 +22,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 
 | Layer | Hardware | Key Responsibilities |
 |---|---|---|
-| Embedded controller | ESP32-S3-DevKitC-1 on expansion base | PID motor control, encoder counting, IMU + battery sensing, safety watchdog, micro-ROS publisher |
+| Embedded controller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | PID motor control, encoder counting, IMU + battery sensing, safety watchdog, micro-ROS publisher |
 | Sensor bridge | Raspberry Pi 5 | micro-ROS agent, LiDAR driver, RealSense driver, EKF, Nav2 (light nodes) |
 | High-level compute | Development PC | SLAM Toolbox, Nav2, RViz2, YOLO, rosbag, AI nodes |
 
@@ -34,7 +34,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 |---|---|---|---|
 | Power | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
-| Microcontroller | ESP32-S3-DevKitC-1 on expansion base | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
+| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
 | Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
 | Motors + encoders | JGA25-371 DC 12V, 45:1 gear ratio | GPIO 39–42 (quadrature, 1010 CPR) | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |

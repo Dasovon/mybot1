@@ -38,7 +38,7 @@ The ESP32-S3 is the embedded base controller. It runs independently of ROS and t
 
 ## Wiring — Confirmed Pin Assignments
 
-**Board:** ESP32-S3-DevKitC-1 on ESP32-S3 expansion base.
+**Board:** ESP32-S3-DevKitC-1 on Lonely Binary ESP32-S3 expansion board.
 All GPIO is 3.3V logic. 3V3 pin powers TB6612 logic, BNO055, INA219, and BME680 directly — no level shifter needed.
 
 ### I2C Bus — GPIO 8 / 9
