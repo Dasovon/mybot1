@@ -22,18 +22,39 @@ The BME680 provides ambient environmental data published by the ESP32 as telemet
 
 ---
 
-## Wiring — Current Connections (from spec)
+## Wiring — Planned Pin Assignments
 
-Connected to **ESP32-S3 via I2C** (ESP32 hosts the I2C bus).
+**Breakout board:** Adafruit BME680 (product #3660) or equivalent.
+**Status:** Not yet wired on current robot — planned addition for new Pi 5 build.
 
-```
-ESP32-S3 I2C Bus
-└── BME680  — Environmental sensor
-```
+### Breakout Pinout
 
-Shares common ground with ESP32, TB6612, Pi, and battery −.
+| BME680 Pin | Description |
+|---|---|
+| VIN | Power 3.3–5V |
+| GND | Ground |
+| SCK / SCL | I2C clock (or SPI clock) |
+| SDI / SDA | I2C data (or SPI MOSI) |
+| SDO | I2C address select / SPI MISO |
+| CS | SPI chip select (pull HIGH to force I2C mode) |
 
-> Specific SDA/SCL GPIO pins and I2C address are TBD.
+### Planned Connection to ESP32-S3
+
+Will share the existing I2C bus with BNO055 and INA219.
+
+| BME680 Pin | ESP32-S3 GPIO | Notes |
+|---|---|---|
+| VIN | 3V3 | |
+| GND | GND | Shared common ground |
+| SDA | GPIO 8 | Shared I2C bus |
+| SCL | GPIO 9 | Shared I2C bus |
+| SDO | GND | Sets I2C address to **0x76** |
+| CS | 3V3 or NC | Pull HIGH to force I2C mode |
+
+Planned I2C address: **0x76** (SDO → GND).
+No address conflict: BNO055=0x28, INA219=0x40, BME680=0x76.
+
+> Mount away from the ESP32 and motor driver to avoid self-heating affecting temperature readings.
 
 ---
 

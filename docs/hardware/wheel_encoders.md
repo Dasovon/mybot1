@@ -14,19 +14,50 @@ Quadrature encoders (2-channel, A + B per wheel) provide:
 
 ---
 
-## Wiring — Current Connections (from spec)
+## Wiring — Confirmed Pin Assignments
 
-Connected to **ESP32-S3** via GPIO (hardware interrupts).
+**Motor/encoder model:** DC 12V JGA25-371, 45:1 gear ratio (Amazon listing says 34:1 — inaccurate).
+Encoder: 11 PPR at motor shaft. Effective CPR with 2× quadrature decoding: **1010** (validated).
 
-| Signal | Connects To |
+### Encoder Wire Colors (JGA25-371 6-wire harness)
+
+| Wire Color | Function |
 |---|---|
-| Left encoder | ESP32-S3 GPIO |
-| Right encoder | ESP32-S3 GPIO |
-| GND | Common GND |
+| Red | Motor power + |
+| White | Motor power − |
+| Blue | Encoder VCC (3.3V–5V) |
+| Black | Encoder GND |
+| Yellow | Encoder channel A |
+| Green | Encoder channel B |
 
-Shares common ground with ESP32, TB6612, Pi, and battery −.
+Blue (encoder VCC) is powered from ESP32 3V3. Encoder output signals are 3.3V compatible — no level shifter needed.
 
-> Specific GPIO pin assignments, encoder voltage level, and channel count (A only vs A+B quadrature) are TBD.
+### Connection to ESP32-S3
+
+Pins configured `INPUT_PULLUP`. Interrupt fires on CHANGE of the A channel only.
+
+| ESP32 GPIO | Signal | Function |
+|---|---|---|
+| GPIO 40 | Left encoder A | `attachInterrupt` CHANGE |
+| GPIO 41 | Left encoder B | Read in ISR for direction |
+| GPIO 42 | Right encoder A | `attachInterrupt` CHANGE |
+| GPIO 39 | Right encoder B | Read in ISR for direction |
+
+ISR direction logic (validated):
+- Left: `A == B on CHANGE` → forward (+)
+- Right: `A != B on CHANGE` → forward (+)
+
+### Key Constants
+
+| Parameter | Value | Source |
+|---|---|---|
+| `ENC_CPR` | 1010 | Validated (3 runs: 1006/1016/1012 avg) |
+| `wheel_radius` | 0.034 m | Measured (68 mm dia; datasheet 65 mm) |
+| `wheel_separation` | 0.179 m | Measured center-to-center |
+
+> ⚠️ **Known EMI issue:** GPIO 40/41 (left encoder A/B) pick up 1 kHz PWM noise from the TB6612.
+> EMA filter (`VEL_ALPHA = 0.2`) mitigates it in firmware.
+> Permanent hardware fix: solder 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND at the ESP32 headers.
 
 ---
 

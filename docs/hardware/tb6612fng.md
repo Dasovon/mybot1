@@ -20,27 +20,37 @@ The TB6612FNG drives both DC motors using PWM signals from the ESP32-S3. It hand
 
 ---
 
-## Wiring — Current Connections (from spec)
+## Wiring — Confirmed Pin Assignments (ESP32-S3 production stack)
 
-| TB6612FNG Pin | Connects To | Notes |
+**Breakout board:** Adafruit TB6612FNG (product #2448).
+STBY → **not wired** — Adafruit breakout has onboard 10 kΩ pull-up (defaults HIGH = enabled).
+Motor A = **RIGHT** | Motor B = **LEFT**
+
+| TB6612 Pin | ESP32 GPIO | Function |
 |---|---|---|
-| Control pins (IN1/IN2/PWM) | ESP32-S3 GPIO | Specific GPIO TBD |
-| GND | Common GND | Battery −, ESP32 GND, Pi GND, sensor GND all shared |
-| VM | Battery positive | Motor supply voltage |
-| VCC | ESP32 board 3.3V or 5V | Logic supply |
-| AO1, AO2 | Left motor terminals | — |
-| BO1, BO2 | Right motor terminals | — |
+| VCC | 3V3 | Logic supply (3.3V — no level shifter needed) |
+| VM | Battery V+ (via PD Hat VIN) | Motor power supply |
+| GND | GND | Common ground |
+| PWMA | GPIO 10 | Right motor speed (PWM, LEDC ch 0, 1 kHz 8-bit) |
+| AIN1 | GPIO 11 | Right motor direction A |
+| AIN2 | GPIO 12 | Right motor direction B |
+| PWMB | GPIO 13 | Left motor speed (PWM, LEDC ch 1, 1 kHz 8-bit) |
+| BIN1 | GPIO 14 | Left motor direction A |
+| BIN2 | GPIO 15 | Left motor direction B |
+| STBY | — | Not wired — onboard pull-up enabled |
+| AO1, AO2 | Right motor terminals | Both wires on MOTORA pads (not the GND pad between sections) |
+| BO1, BO2 | Left motor terminals | Both wires on MOTORB pads (not the GND pad between sections) |
 
-### Motor Direction Logic (from spec)
+> ⚠️ **Damage history:** first unit destroyed (2026-04-25) when 12V VM wire bridged to AIN1 logic pin on breadboard. Max safe logic input is **3.8V** (ESP32 3.3V stack). Verify VM wire has no path to any signal pin before powering.
 
-| IN1 | IN2 | State |
+### Motor Direction Truth Table
+
+| AIN1 / BIN1 | AIN2 / BIN2 | State |
 |---|---|---|
 | HIGH | LOW | Forward |
 | LOW | HIGH | Reverse |
-| HIGH | HIGH | Brake |
 | LOW | LOW | Coast |
-
-Applies to both motor channels (A = left, B = right).
+| HIGH | HIGH | Brake |
 
 ---
 

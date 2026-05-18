@@ -20,16 +20,36 @@ Update this file with your specific model once confirmed.
 
 ---
 
-## Wiring — Current Connections (from spec)
+## Wiring — Confirmed Connections
 
-Connected to **Raspberry Pi 5 via USB**.
+**Model confirmed:** RPLidar A1 M8 (Slamtec).
 
-| Interface | Details |
+```
+RPLidar A1 M8
+    └── USB adapter (CP2102, VID:10c4 PID:ea60)
+            └── Raspberry Pi USB 2.0 port
+                    /dev/rplidar  (udev symlink)
+```
+
+| Property | Value |
 |---|---|
-| Physical | USB |
-| Connected to | Raspberry Pi 5 |
+| Interface | USB (via CP2102 USB-serial adapter) |
+| Connected to | Raspberry Pi 5 USB 2.0 port |
+| Baud rate | **115200** (must be set explicitly — default in some driver versions is wrong) |
+| udev symlink | `/dev/rplidar` |
+| Power | Bus-powered via USB (5V, ~400 mA) |
 
-> Specific USB port, device path, and baud rate are TBD — depends on RPLIDAR model (not yet specified in spec).
+### udev Rule
+
+```
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar"
+```
+
+File: `/etc/udev/rules.d/99-mybot.rules`
+
+Reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
+
+> ⚠️ Always set `serial_baudrate = 115200` explicitly in the launch file. Silent timeout if omitted.
 
 ---
 
