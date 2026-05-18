@@ -6,11 +6,7 @@ A distributed ROS 2 autonomous mobile robot (AMR) built on a proven hardware sta
 
 ## System Overview
 
-```
-Development PC  ←→  Wi-Fi / Ethernet  ←→  Raspberry Pi 5  ←→  USB (micro-ROS)  ←→  ESP32-S3
-    Brain                                  Nervous System                            Reflexes
-SLAM · Nav2 · AI · RViz             Sensor bridge · ROS drivers              Motion · Safety
-```
+![System Architecture](docs/architecture/system_overview.png)
 
 ---
 

@@ -2,24 +2,7 @@
 
 ## Compute Layers
 
-```
-Development PC
-(SLAM / Nav2 / AI / RViz / Logging)
-        ↑
-  Wi-Fi / Ethernet
-        ↑
-  Raspberry Pi 5
-(Sensor bridge / ROS interface / drivers)
-        ↑
-    USB Serial
-        ↑
-    ESP32-S3
-(Motion controller / telemetry / safety)
-        ↑
-    TB6612FNG
-        ↑
-      Motors
-```
+![System Architecture](system_overview.png)
 
 ## Layer Responsibilities
 
