@@ -1,164 +1,165 @@
-# Wiring Audit — Current State & Improvement Suggestions
+# Wiring Audit — Current State & Open Items
 
-Based strictly on `autonomous_robot_system_specification_v1.md`.
+All confirmed data sourced from `docs/hardware/` component docs.
 
 ---
 
-## What the Spec Defines
+## Confirmed Connection Map
 
-### Connection Map
+### Power
 
 ```
-Development PC
-    ↕  Wi-Fi / Ethernet
-Raspberry Pi 5
-    ├── USB → ESP32-S3
-    ├── USB → RPLIDAR
-    └── USB → RealSense D435
+Battery (3S LiPo ~12V, or 9–24V DC)
+    └── RPI5 PD Power Hat INPUT (DC barrel)
+            ├── USB-C OUTPUT (5.15V / 5A, USB PD 3.0) → Raspberry Pi 5
+            │       ├── USB-A → ESP32-S3          (power + micro-ROS serial)
+            │       ├── USB-A (USB 2.0) → RPLidar A1 M8  (power + data)
+            │       └── USB-A (USB 3.0, blue) → RealSense D435  (power + data)
+            └── VIN screw terminal (raw battery voltage) → TB6612FNG VM pin
 
-ESP32-S3
-    ├── I2C → BNO055 (IMU)
-    ├── I2C → INA219 (battery)
-    ├── I2C → BME680 (environment)
-    ├── GPIO/PWM → TB6612FNG → Motors (left + right)
-    └── GPIO (interrupts) → Wheel encoders (left + right)
+TB6612 logic VCC → ESP32 3V3 pin
+Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one rail.
 ```
 
-### Common Ground (all share one ground rail)
+### ESP32-S3 GPIO
+
+| GPIO | Signal | Connected to |
+|---|---|---|
+| 8 | I2C SDA | BNO055 (0x28), INA219 (0x40), BME680 (0x76 — planned) |
+| 9 | I2C SCL | BNO055, INA219, BME680 |
+| 10 | PWMA | TB6612 PWMA — right motor speed |
+| 11 | AIN1 | TB6612 AIN1 — right motor direction A |
+| 12 | AIN2 | TB6612 AIN2 — right motor direction B |
+| 13 | PWMB | TB6612 PWMB — left motor speed |
+| 14 | BIN1 | TB6612 BIN1 — left motor direction A |
+| 15 | BIN2 | TB6612 BIN2 — left motor direction B |
+| 19, 20 | USB D−/D+ | Native HWCDC → Pi `/dev/ttyACM0` (micro-ROS) |
+| 39 | Right encoder B | JGA25-371 right wheel, read in ISR |
+| 40 | Left encoder A | JGA25-371 left wheel, `attachInterrupt` CHANGE ⚠️ EMI |
+| 41 | Left encoder B | JGA25-371 left wheel, read in ISR ⚠️ EMI |
+| 42 | Right encoder A | JGA25-371 right wheel, `attachInterrupt` CHANGE |
+
+**Motor A = RIGHT, Motor B = LEFT.**
+
+### I2C Bus
+
+```
+ESP32 GPIO 8 (SDA) / GPIO 9 (SCL)
+├── BNO055  addr 0x28  (Adafruit breakout — ADR pin unconnected)
+├── INA219  addr 0x40  (Adafruit breakout — A0/A1 unconnected)
+└── BME680  addr 0x76  (SDO → GND) — not yet wired
+```
+
+Adafruit BNO055 and INA219 breakouts have onboard pull-up resistors — no external pull-ups needed for these two devices. Confirm BME680 breakout has onboard pull-ups before wiring.
+
+### Encoder Wiring (JGA25-371 6-wire harness)
+
+| Wire | Function | Connected to |
+|---|---|---|
+| Red | Motor + | TB6612 AO1/BO1 |
+| White | Motor − | TB6612 AO2/BO2 |
+| Blue | Encoder VCC | ESP32 3V3 |
+| Black | Encoder GND | Common GND |
+| Yellow | Channel A | ESP32 GPIO 40 (left) / 42 (right) |
+| Green | Channel B | ESP32 GPIO 41 (left) / 39 (right) |
+
+Encoder output is 3.3V — no level shifter required.
+
+### Common Ground
 
 ```
 Battery −
+├── RPI5 PD Power Hat GND
+│       └── Pi GND (via USB PD cable)
 ├── ESP32 GND
-├── Pi GND
 ├── TB6612 GND
-└── Sensor GND
+├── Encoder GND (Blue/Black harness)
+└── Sensor GND (BNO055, INA219, BME680)
 ```
-
-### Motor Direction Logic (TB6612FNG)
-
-| IN1 | IN2 | State |
-|---|---|---|
-| HIGH | LOW | Forward |
-| LOW | HIGH | Reverse |
-| HIGH | HIGH | Brake |
-| LOW | LOW | Coast |
 
 ---
 
-## What the Spec Does NOT Define
+## Resolved Items (from original audit)
 
-These are gaps that must be filled before wiring or writing firmware:
-
-| Missing | Impact |
+| Item | Resolution |
 |---|---|
-| Specific ESP32 GPIO pin assignments (motors, encoders) | Cannot write firmware |
-| I2C SDA/SCL pin assignments | Cannot configure I2C |
-| Encoder type (single-channel hall vs quadrature A/B) | Affects direction detection |
-| Encoder supply voltage (3.3V or 5V) | Risk of damaging ESP32 if 5V encoders used without level shifter |
-| RPLIDAR model (A1 / A2 / A3 / C1 / S1) | Affects driver config and baud rate |
-| USB port assignment on Pi (which port for which device) | Affects udev rules |
-| Battery chemistry and voltage (2S/3S/4S LiPo, Li-ion, etc.) | Safety cutoff thresholds depend on this |
-| Power distribution (how battery → Pi 5V, ESP32 3.3V) | Fundamental — Pi 5 needs dedicated 5V/5A |
-| Shunt resistor value for INA219 | Affects current measurement range |
+| Power distribution plan | RPI5 PD Power Hat selected — 40W cap, 8W headroom over 32W peak load |
+| GPIO pin assignments | Fully confirmed — motors 10–15, encoders 39–42, I2C 8/9 |
+| I2C SDA/SCL pins | GPIO 8 / 9 — confirmed working on bench |
+| Encoder voltage level | 3.3V supply and output — no level shifter needed |
+| RPLIDAR model | RPLidar A1 M8, CP2102 adapter (VID:10c4 PID:ea60), baud 115200 |
+| USB port assignments on Pi | RPLidar → USB 2.0, RealSense → USB 3.0 (blue), ESP32 → any USB-A |
+| Battery chemistry | 3S LiPo (12.6V full, 9.9V cutoff) — within hat's 9–24V range |
+| INA219 shunt resistor | Adafruit breakout has onboard 0.1 Ω shunt (3.2 A max range) |
+| RealSense → USB 3.0 required | Confirmed — must use blue port on Pi 5 |
+| I2C pull-up resistors | Adafruit BNO055 + INA219 breakouts have onboard pull-ups |
+| Encoder type | Quadrature (A + B) — direction detection confirmed in firmware |
 
 ---
 
-## Audit Findings & Improvement Suggestions
+## Open Items & Improvement Suggestions
 
-### 1. Missing Power Distribution Plan (HIGH PRIORITY)
+### 1. GPIO 40/41 EMI — Hardware Fix Pending (MEDIUM)
 
-**Problem:** The spec shows no power architecture. A robot with this many components needs a clear plan.
+**Known issue:** Left encoder A (GPIO 40) and B (GPIO 41) pick up 1 kHz PWM switching noise from the TB6612. Causes spurious encoder counts, especially at low speed.
 
-**Suggested architecture:**
+**Current mitigation:** EMA velocity filter (`VEL_ALPHA = 0.2`) in firmware attenuates the noise.
 
-```
-Battery (e.g., 3S LiPo, 11.1V)
-├── VM pin → TB6612FNG (motor voltage, direct from battery)
-├── → 5V/5A Buck Regulator → Raspberry Pi 5 (dedicated, do not share with motors)
-├── → 3.3V or 5V regulator → ESP32-S3 (or USB from Pi if tethered during dev)
-└── → 3.3V → I2C sensors (BNO055, INA219, BME680) and RPLIDAR (check model)
-```
-
-The Pi 5 draws up to 25W under load — it needs its own regulator, not a shared rail with motors.
+**Permanent fix:** Solder 100 nF ceramic capacitors from GPIO 40 → GND and GPIO 41 → GND at the ESP32 headers. Not yet installed.
 
 ---
 
-### 2. Encoder Voltage Level Unspecified (HIGH PRIORITY)
+### 2. TB6612FNG Decoupling Capacitors (MEDIUM)
 
-**Problem:** Many DC motor encoder assemblies output 5V signals. The ESP32-S3 GPIO is 3.3V logic. Connecting 5V encoder signals directly can damage the ESP32.
+**Issue:** Motor switching creates voltage spikes on the VM rail that can corrupt I2C and destabilize the ESP32.
 
-**Suggestion:** Confirm encoder supply and output voltage. If 5V, add a level shifter (e.g., 74AHCT125 or simple resistor divider) on each encoder signal line before connecting to ESP32 GPIO.
+**Suggestion:** Add close to the TB6612 VM pin:
+- 100 µF electrolytic (bulk bypass)
+- 100 nF ceramic (high-frequency bypass)
 
----
-
-### 3. No Pull-up Resistors Specified for I2C
-
-**Problem:** The ESP32-S3 internal pull-ups are weak (~47 kΩ) and insufficient for a multi-device I2C bus at 400 kHz.
-
-**Suggestion:** Add external pull-up resistors (4.7 kΩ to 3.3V) on SDA and SCL lines. One pair serves the entire bus — do not add per-device.
+Also add 100 nF ceramic across each motor terminal pair (AO1/AO2 and BO1/BO2).
 
 ---
 
-### 4. No Decoupling Capacitors Mentioned for TB6612FNG
+### 3. Inline Fuse on Battery Positive (MEDIUM)
 
-**Problem:** Motor switching creates voltage spikes on the power rail that can corrupt I2C communication and ESP32 operation.
+**Issue:** No onboard fuse on the RPI5 PD Power Hat. A motor stall or wiring short can deliver full battery current before anything trips.
 
-**Suggestion:** Add decoupling capacitors close to the TB6612FNG VM pin: 100 µF electrolytic (bulk) + 100 nF ceramic (bypass). Also add 100 nF across each motor terminal pair.
-
----
-
-### 5. BME680 Thermal Proximity to Motors / ESP32
-
-**Problem:** The BME680 measures ambient temperature, but if it is mounted close to the ESP32 (which self-heats) or near the motor driver, temperature readings will be inaccurate.
-
-**Suggestion:** Mount the BME680 away from heat sources, ideally with airflow access. The I2C wires can be extended a short distance to accommodate this.
+**Suggestion:** Add an inline automotive or blade fuse on the battery positive wire before the hat's DC barrel input. Size to ~5–10 A above expected peak draw (~8 A for hat + motor bursts).
 
 ---
 
-### 6. Single USB Connection ESP32 ↔ Pi (Acceptable but note the risk)
+### 4. BME680 Thermal Placement (MEDIUM)
 
-**Current:** ESP32 and Pi communicate via USB serial. This is correct for early development.
+**Issue:** BME680 measures ambient temperature. If mounted near the ESP32 or TB6612, readings will read above ambient.
 
-**Note:** USB CDC on ESP32-S3 can occasionally disconnect on Pi reboot or USB hub issues. The safety watchdog must handle this — if serial goes silent, the ESP32 stops motors. This is already called out in the spec and is correct.
-
-**Future consideration:** If USB proves unreliable in a mobile vibration environment, UART via GPIO pins (with a fixed baud rate) is more robust than USB CDC.
+**Suggestion:** Mount with airflow access, away from the ESP32 and motor driver. I2C wires can be extended a short distance. Wire once the sensor's physical position is finalized.
 
 ---
 
-### 7. RealSense D435 Requires USB 3.0
+### 5. BME680 I2C Pull-ups (LOW — confirm before wiring)
 
-**Problem:** The spec says "USB" but does not specify USB 3.0. The D435 requires USB 3.0 bandwidth.
+**Issue:** Unknown whether the specific BME680 breakout board has onboard pull-up resistors on SDA/SCL.
 
-**Confirmed requirement:** Must use one of the Pi 5's USB 3.0 ports (blue ports). RPLIDAR can use USB 2.0.
-
----
-
-### 8. No Fuse / Overcurrent Protection
-
-**Problem:** If a motor stalls or wiring shorts, the battery can deliver very high current before any protection activates.
-
-**Suggestion:** Add an inline fuse or polyfuse on the battery positive rail before the distribution point. Size to just above expected peak current draw.
+**Action:** Before wiring the BME680, confirm the breakout has onboard pull-ups. If not, add 4.7 kΩ to 3.3V on SDA and SCL (one pair for the whole bus — do not duplicate per device).
 
 ---
 
-### 9. Common Ground Path Needs Physical Layout Attention
+### 6. Star Ground — Physical Layout (LOW)
 
-**Problem:** The spec correctly calls for a common ground, but if ground runs are long or thin, ground loops and noise can still occur.
+**Issue:** Common ground is logically correct but daisy-chaining ground connections in physical wiring can introduce noise.
 
-**Suggestion:** Use a star-ground topology — all grounds meet at one physical point (e.g., a ground plane or thick bus bar), not daisy-chained device to device.
+**Suggestion:** Run all ground connections to one physical point (a ground bus bar or thick ground plane) rather than device-to-device. Especially important once motors are running under load.
 
 ---
 
 ## Summary Table
 
-| Issue | Priority | Status |
+| Item | Priority | Status |
 |---|---|---|
-| Power distribution plan | HIGH | Not in spec — needs design |
-| Encoder voltage level | HIGH | TBD |
-| I2C pull-up resistors | MEDIUM | Not in spec |
-| TB6612 decoupling capacitors | MEDIUM | Not in spec |
-| BME680 thermal placement | MEDIUM | Not in spec |
-| RPLIDAR model selection | MEDIUM | TBD |
-| RealSense D435 → USB 3.0 port | LOW (easy fix) | Confirm port assignment |
-| Fuse / overcurrent protection | MEDIUM | Not in spec |
-| Star ground topology | LOW | Physical layout concern |
+| GPIO 40/41 EMI — 100 nF caps | MEDIUM | Fix known, not yet installed |
+| TB6612 decoupling capacitors | MEDIUM | Not yet installed |
+| Inline fuse on battery positive | MEDIUM | Not yet installed |
+| BME680 thermal placement | MEDIUM | BME680 not yet wired |
+| BME680 I2C pull-ups | LOW | Confirm before wiring |
+| Star ground physical layout | LOW | Physical build concern |
