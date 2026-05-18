@@ -57,7 +57,7 @@ ISR direction logic (validated):
 
 > ⚠️ **Known EMI issue:** GPIO 40/41 (left encoder A/B) pick up 1 kHz PWM noise from the TB6612.
 > EMA filter (`VEL_ALPHA = 0.2`) mitigates it in firmware.
-> Permanent hardware fix: solder 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND at the ESP32 headers.
+> Hardware fix: route left encoder wires through a breadboard; place 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND on the breadboard before connecting to the ESP32.
 
 ---
 

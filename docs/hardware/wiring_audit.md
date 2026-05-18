@@ -105,7 +105,21 @@ Battery −
 
 **Current mitigation:** EMA velocity filter (`VEL_ALPHA = 0.2`) in firmware attenuates the noise.
 
-**Permanent fix:** Solder 100 nF ceramic capacitors from GPIO 40 → GND and GPIO 41 → GND at the ESP32 headers. Not yet installed.
+**Fix — breadboard implementation:**
+
+Route the left encoder signal wires through a small breadboard before they reach the ESP32. On the breadboard, place:
+- 100 nF ceramic cap between the GPIO 40 row and GND
+- 100 nF ceramic cap between the GPIO 41 row and GND
+
+```
+Left encoder Yellow (Ch A) ──┬── jumper wire → ESP32 GPIO 40
+                             └── 100 nF cap → GND rail
+
+Left encoder Green  (Ch B) ──┬── jumper wire → ESP32 GPIO 41
+                             └── 100 nF cap → GND rail
+```
+
+Keep the breadboard and cap leads as short as practical — a long wire before the cap defeats the filtering.
 
 ---
 
@@ -113,11 +127,22 @@ Battery −
 
 **Issue:** Motor switching creates voltage spikes on the VM rail that can corrupt I2C and destabilize the ESP32.
 
-**Suggestion:** Add close to the TB6612 VM pin:
-- 100 µF electrolytic (bulk bypass)
-- 100 nF ceramic (high-frequency bypass)
+**Fix — breadboard implementation:**
 
-Also add 100 nF ceramic across each motor terminal pair (AO1/AO2 and BO1/BO2).
+Place a small breadboard in line with the VM power feed to the TB6612. On the breadboard, between the VM rail and GND rail, add:
+- 100 µF electrolytic cap (bulk bypass — observe polarity: + to VM)
+- 100 nF ceramic cap in parallel (high-frequency bypass)
+
+```
+Battery VIN ──── breadboard VM rail ──── TB6612 VM pin
+                      │
+                 100 µF electrolytic (+ to VM)
+                 100 nF ceramic
+                      │
+                    GND rail ──── common GND
+```
+
+For the motor output lines (AO1/AO2, BO1/BO2): place 100 nF ceramic caps across each motor terminal pair on the breadboard or directly at the motor connector if accessible.
 
 ---
 

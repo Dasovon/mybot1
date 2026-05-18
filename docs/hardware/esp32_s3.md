@@ -119,7 +119,7 @@ ESP32 GND → Battery −, Pi GND, TB6612 GND, encoder GND, sensor GND — all o
 
 > **Known EMI issue:** GPIO 40/41 (left encoder) pick up TB6612 1 kHz PWM noise.
 > `VEL_ALPHA = 0.2` EMA filter attenuates it in firmware.
-> Permanent fix: solder 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND at ESP32 headers.
+> Hardware fix: route encoder wires through a breadboard and place 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND on the breadboard before connecting to the ESP32.
 
 ---
 

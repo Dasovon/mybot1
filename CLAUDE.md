@@ -83,7 +83,7 @@ Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one r
 **Motor A = RIGHT, Motor B = LEFT.**
 STBY not wired — Adafruit breakout has onboard 10 kΩ pull-up (always enabled).
 
-⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612 1 kHz PWM noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Permanent fix: 100 nF ceramic caps, GPIO 40 → GND and GPIO 41 → GND at ESP32 headers.
+⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612 1 kHz PWM noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
 
 **Avoid:** GPIO 4,5,6,7 (not broken out), 19/20 (USB), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping pins).
 
@@ -272,7 +272,7 @@ dev1_ws/                              ← workspace root (this repo)
 ### Electrical
 - All subsystems share one common ground: Battery −, ESP32, Pi, TB6612, encoders, sensors.
 - Missing common ground causes serial errors, PWM noise, encoder EMI, and motor glitches.
-- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND — TB6612 1 kHz PWM couples into these lines.
+- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND — TB6612 1 kHz PWM couples into these lines. Use a breadboard with caps in the encoder signal path.
 
 ### Motion Control
 - Closed-loop PID velocity control only (encoder feedback → wheel velocity target in rad/s).
