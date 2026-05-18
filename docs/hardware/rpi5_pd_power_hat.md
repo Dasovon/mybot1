@@ -2,7 +2,7 @@
 
 ## Role in This Project
 
-The RPI5 PD Power Hat is the primary power distribution board for the new Pi 5 build. It replaces the DFR0205 buck converter used on the previous Pi 4 robot. It accepts a battery input (9–24V DC) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
+The RPI5 PD Power Hat is the primary power distribution board for this build. It accepts a battery input (9–24V DC) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
 
 ---
 

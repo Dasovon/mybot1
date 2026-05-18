@@ -93,7 +93,7 @@ Configure `cyclonedds` or `fastdds` with the correct network interface.
 ## Power
 
 - Power input: USB-C PD, 5V/5A (25W recommended)
-- The Pi 5 draws significantly more power than Pi 4 under load
+- The Pi 5 draws up to 25W under heavy load — use a dedicated regulator
 - Use a dedicated 5V/5A regulator from the robot battery (not shared with motors)
 - A Pi 5 active cooler is strongly recommended
 

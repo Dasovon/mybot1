@@ -38,7 +38,7 @@ The ESP32-S3 is the embedded base controller. It runs independently of ROS and t
 
 ## Wiring — Confirmed Pin Assignments
 
-**Board:** ESP32-S3-DevKitC-1 on Lonely Binary ESP32-S3 Expansion Base.
+**Board:** ESP32-S3-DevKitC-1 on ESP32-S3 expansion base.
 All GPIO is 3.3V logic. 3V3 pin powers TB6612 logic, BNO055, INA219, and BME680 directly — no level shifter needed.
 
 ### I2C Bus — GPIO 8 / 9
@@ -105,13 +105,13 @@ Wi-Fi used only for OTA flashing and TelnetStream monitoring — **not** for mic
 
 ESP32 GND → Battery −, Pi GND, TB6612 GND, encoder GND, sensor GND — all on one rail.
 
-### Pins to Avoid (Lonely Binary Expansion Base)
+### Pins to Avoid (ESP32-S3 expansion base)
 
 | GPIO | Reason |
 |---|---|
-| 4, 5, 6, 7 | Not broken out on Lonely Binary board |
+| 4, 5, 6, 7 | Not broken out on ESP32-S3 expansion board |
 | 19, 20 | Native USB D−/D+ — HWCDC transport |
-| 25, 26, 27, 32, 33 | Not broken out on Lonely Binary board |
+| 25, 26, 27, 32, 33 | Not broken out on ESP32-S3 expansion board |
 | 35, 36, 37 | Internal SPI flash/PSRAM — do not use |
 | 38 | Onboard RGB LED |
 | 43, 44 | UART0 TX/RX — not broken out |

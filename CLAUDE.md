@@ -8,7 +8,9 @@ Hardware docs live in `docs/hardware/`. The quick-reference GPIO map is in `docs
 
 ## Project Overview
 
-A distributed ROS 2 Humble autonomous mobile robot (AMR) built on a proven hardware stack from a running production robot (`articubot_one`). Capable of autonomous mapping, SLAM, navigation, obstacle avoidance, multi-sensor fusion, semantic perception, and environmental monitoring. Architecture mirrors a commercial AMR, not a hobby robot.
+A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone build from scratch. Capable of autonomous mapping, SLAM, navigation, obstacle avoidance, multi-sensor fusion, semantic perception, and environmental monitoring. Architecture mirrors a commercial AMR, not a hobby robot.
+
+> **For AI assistants:** This is a standalone project. Do not reference, import patterns from, or compare against any other robot project. All wiring and pinout data in `docs/hardware/` is correct for this build.
 
 ---
 
@@ -24,7 +26,7 @@ SLAM / Nav2 / AI / RViz                    Sensor bridge / ROS drivers          
 
 | Layer | Hardware | Key Responsibilities |
 |---|---|---|
-| Embedded controller | ESP32-S3-DevKitC-1 (Lonely Binary base) | PID motor control, encoder counting, IMU + battery sensing, safety watchdog, micro-ROS publisher |
+| Embedded controller | ESP32-S3-DevKitC-1 on expansion base | PID motor control, encoder counting, IMU + battery sensing, safety watchdog, micro-ROS publisher |
 | Sensor bridge | Raspberry Pi 5 | micro-ROS agent, LiDAR driver, RealSense driver, EKF, Nav2 (light nodes) |
 | High-level compute | Development PC | SLAM Toolbox, Nav2, RViz2, YOLO, rosbag, AI nodes |
 
@@ -37,7 +39,7 @@ SLAM / Nav2 / AI / RViz                    Sensor bridge / ROS drivers          
 | Power (option A) | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Power (option B) | DFRobot DFR0205 | 3.6–25V in → adjustable 5V/5A to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
-| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary base | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
+| Microcontroller | ESP32-S3-DevKitC-1 on expansion base | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
 | Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
 | Motors + encoders | JGA25-371 DC 12V, 45:1 gear ratio | GPIO 39–42 (quadrature, 1010 CPR) | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
@@ -60,7 +62,7 @@ See [`docs/hardware/dfr0205.md`](docs/hardware/dfr0205.md) and [`docs/hardware/r
 | Pi 5 headroom | Comfortable | Tight — Pi 5 peaks near 25W |
 | Input range | 9–24V DC or USB PD | 3.6–25V DC |
 | VIN motor passthrough | Yes | Yes |
-| Tested | New (Pi 5 build) | Yes — confirmed on Pi 4 robot |
+| Field tested | Not yet | Yes |
 | Recommendation | **Preferred for Pi 5** | Valid fallback |
 
 ### Option A — RPI5 PD Power Hat (preferred)

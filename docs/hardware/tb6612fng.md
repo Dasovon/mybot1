@@ -41,7 +41,7 @@ Motor A = **RIGHT** | Motor B = **LEFT**
 | AO1, AO2 | Right motor terminals | Both wires on MOTORA pads (not the GND pad between sections) |
 | BO1, BO2 | Left motor terminals | Both wires on MOTORB pads (not the GND pad between sections) |
 
-> ⚠️ **Damage history:** first unit destroyed (2026-04-25) when 12V VM wire bridged to AIN1 logic pin on breadboard. Max safe logic input is **3.8V** (ESP32 3.3V stack). Verify VM wire has no path to any signal pin before powering.
+> ⚠️ **Warning:** Max safe logic input on the ESP32 3.3V stack is **3.8V**. If the 12V VM wire ever bridges to any signal pin (AIN1/AIN2/BIN1/BIN2), the input gates will be destroyed instantly. Verify VM has no breadboard or wiring path to any signal pin before powering.
 
 ### Motor Direction Truth Table
 

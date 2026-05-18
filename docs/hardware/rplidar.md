@@ -45,7 +45,7 @@ RPLidar A1 M8
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar"
 ```
 
-File: `/etc/udev/rules.d/99-mybot.rules`
+File: `/etc/udev/rules.d/99-robot.rules`
 
 Reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 
