@@ -2,7 +2,7 @@
 
 ## Role in This Project
 
-The RPI5 PD Power Hat is the primary power distribution board for this build. It accepts a battery input (9–24V DC) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
+The RPI5 PD Power Hat is the power distribution board for this build. It accepts a battery input (9–24V DC) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
 
 ---
 
@@ -86,9 +86,9 @@ TB6612 logic VCC → ESP32 3V3 pin (not from hat directly)
 
 ---
 
-## Suggestions / Audit Notes
+## Notes
 
-- **Battery chemistry:** Confirm your battery voltage stays within the 9–24V DC input range at both full charge and discharge cutoff. A 3S LiPo (12.6V full, 9.9V cutoff) fits well. A 4S LiPo (16.8V full) also fits.
-- **PD voltage selection:** Default 15V input from USB PD. If using the DC barrel from a 12V LiPo, PD negotiation is not involved — the barrel voltage goes straight to the converter.
-- **5V rail budget:** 5V × 8A = 40W total. Pi 5 can draw up to 25W under heavy load. RealSense adds ~4.5W. RPLIDAR adds ~2W. ESP32 adds ~0.5W. Budget is tight under full AI load — monitor the hat's thermal performance.
-- **No onboard fuse visible:** Add an inline fuse on the battery positive wire before the hat's DC barrel input.
+- **Battery chemistry:** Confirm voltage stays within 9–24V at both full charge and cutoff. A 3S LiPo (12.6V full, 9.9V cutoff) fits well. A 4S LiPo (16.8V full) also fits.
+- **PD voltage selection:** When using the DC barrel (not USB PD input), PD negotiation is not involved — the converter regulates directly from barrel voltage to 5V.
+- **5V rail budget:** Pi 5 (~25W) + RealSense (~4.5W) + RPLidar (~2W) + ESP32 (~0.5W) = ~32W peak. The hat's 40W cap gives ~8W of headroom — adequate for this build.
+- **Fuse:** Add an inline fuse on the battery positive wire before the hat's DC barrel input. No onboard fuse is visible on the board.

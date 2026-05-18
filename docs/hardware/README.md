@@ -2,8 +2,8 @@
 
 | Component | Role | Wiring Status | Doc |
 |---|---|---|---|
-| RPI5 PD Power Hat | Power option A: 9–24V in → 5V/8A USB PD + VIN motor | Confirmed | [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md) |
-| DFR0205 | Power option B: 3.6–25V in → adjustable 5V/5A + VIN motor | Validated | [dfr0205.md](dfr0205.md) |
+| RPI5 PD Power Hat | Power distribution — 9–24V in → 5V/8A USB PD + VIN motor | **Selected** | [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md) |
+| DFR0205 | Alternative power board — not used in this build | Not used | [dfr0205.md](dfr0205.md) |
 | ESP32-S3-DevKitC-1 | Embedded motion controller | Confirmed | [esp32_s3.md](esp32_s3.md) |
 | Raspberry Pi 5 | Sensor bridge / ROS interface | Confirmed | [raspberry_pi_5.md](raspberry_pi_5.md) |
 | Development PC | SLAM / Nav2 / AI / RViz | Confirmed | [development_pc.md](development_pc.md) |

@@ -36,8 +36,7 @@ SLAM / Nav2 / AI / RViz                    Sensor bridge / ROS drivers          
 
 | Component | Model | Interface | Layer |
 |---|---|---|---|
-| Power (option A) | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
-| Power (option B) | DFRobot DFR0205 | 3.6–25V in → adjustable 5V/5A to Pi | Pi |
+| Power | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
 | Microcontroller | ESP32-S3-DevKitC-1 on expansion base | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
 | Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
@@ -52,48 +51,17 @@ SLAM / Nav2 / AI / RViz                    Sensor bridge / ROS drivers          
 
 ## Power Architecture
 
-**Two power options — one will be chosen. Not both.**
-See [`docs/hardware/dfr0205.md`](docs/hardware/dfr0205.md) and [`docs/hardware/rpi5_pd_power_hat.md`](docs/hardware/rpi5_pd_power_hat.md) for full comparison.
-
-| | RPI5 PD Power Hat | DFR0205 |
-|---|---|---|
-| Max power | **40W (8A × 5V)** | 25W (5A × 5V) |
-| Pi 5 connection | USB PD 3.0 (negotiated 5.15V/5A) | USB-C cable or GPIO header |
-| Pi 5 headroom | Comfortable | Tight — Pi 5 peaks near 25W |
-| Input range | 9–24V DC or USB PD | 3.6–25V DC |
-| VIN motor passthrough | Yes | Yes |
-| Field tested | Not yet | Yes |
-| Recommendation | **Preferred for Pi 5** | Valid fallback |
-
-### Option A — RPI5 PD Power Hat (preferred)
-
 ```
 Battery (9–24V DC, e.g. 3S LiPo ~12V)
     └── RPI5 PD Power Hat INPUT (DC barrel)
             ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
-            │       ├── Pi USB-A  →  ESP32-S3         (power + micro-ROS serial)
-            │       ├── Pi USB-A  →  RPLidar A1        (power + data, USB 2.0)
-            │       └── Pi USB-A  →  RealSense D435    (power + data, USB 3.0)
-            └── VIN screw terminal  →  TB6612FNG VM    (raw battery voltage)
-```
+            │       ├── Pi USB-A  →  ESP32-S3       (power + micro-ROS serial)
+            │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
+            │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
+            └── VIN screw terminal  →  TB6612FNG VM  (raw battery voltage, motor power)
 
-### Option B — DFR0205 (fallback)
-
-```
-Battery (3.6–25V DC, e.g. 3S LiPo ~12V)
-    └── DFR0205 INPUT
-            ├── OUTPUT (regulated 5V / 5A)  →  Raspberry Pi 5 (USB-C)
-            │       ├── Pi USB-A  →  ESP32-S3         (power + micro-ROS serial)
-            │       ├── Pi USB-A  →  RPLidar A1        (power + data, USB 2.0)
-            │       └── Pi USB-A  →  RealSense D435    (power + data, USB 3.0)
-            └── VIN passthrough  →  TB6612FNG VM       (raw battery voltage)
-```
-
-Both options share the same downstream wiring:
-
-```
 TB6612 logic VCC  →  ESP32 3V3 pin
-Common ground: Battery −, power board GND, Pi GND, ESP32 GND, TB6612 GND — all one rail.
+Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one rail.
 ```
 
 ---
