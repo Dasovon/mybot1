@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>robot_slam</name>
+  <version>0.1.0</version>
+  <description>SLAM configuration and launch files. Current: slam_toolbox (2D). Future: RTAB-Map (RGB-D).</description>
+  <maintainer email="placeholder@example.com">robot</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>slam_toolbox</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

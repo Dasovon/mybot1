@@ -1,0 +1,39 @@
+# ROS 2 colcon build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+
+# C++ build
+*.o
+*.a
+*.so
+*.cmake
+CMakeCache.txt
+CMakeFiles/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# rosbag recordings
+*.db3
+*.mcap
+*.yaml.bag
+
+# Firmware build artifacts
+firmware/esp32/.pio/
+firmware/esp32/.vscode/
