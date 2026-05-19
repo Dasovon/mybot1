@@ -14,6 +14,7 @@
 | Adafruit BNO055 | IMU — orientation / heading | Confirmed | [bno055_imu.md](bno055_imu.md) |
 | Adafruit INA219 | Battery voltage / current monitor | Confirmed | [ina219_battery_monitor.md](ina219_battery_monitor.md) |
 | BME680 | Environmental sensor (temp / humidity / pressure / gas) | Planned — not yet wired | [bme680_environmental.md](bme680_environmental.md) |
+| Waveshare 2.42" OLED | Status display (SSD1309, 128×64, SPI0 on Pi) | Planned — not yet wired | [oled_display.md](oled_display.md) |
 
 ## Quick Reference — ESP32-S3 GPIO Map
 

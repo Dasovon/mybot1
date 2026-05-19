@@ -35,14 +35,15 @@ Follow the component-by-component electronics build protocol before starting Pha
 
 **[`docs/testing/electronics_build_protocol_2026-05-18.md`](../testing/electronics_build_protocol_2026-05-18.md)**
 
-The protocol covers 13 gates — one component added and tested at a time — ending with a full bench test of all electronics running simultaneously. Phase 0 is complete when Gate 13 passes.
+The protocol covers 14 gates — one component added and tested at a time — ending with a full bench test of all electronics running simultaneously. Phase 0 is complete when Gate 14 passes.
 
 Phase 0 is complete when:
 - All hardware wired per GPIO map in CLAUDE.md
 - GPIO 40/41 EMI caps confirmed working (Gate 8)
 - Common ground verified across all components
 - Pi reachable over SSH, `/dev/ttyACM0` present, `/dev/rplidar` present
-- All ROS topics publishing at expected rates with full system powered (Gate 13)
+- OLED display working on Pi SPI0 (Gate 13)
+- All ROS topics publishing at expected rates with full system powered (Gate 14)
 
 ---
 
@@ -344,7 +345,7 @@ Phase 5 is complete when all four criteria pass. This is the **MVP milestone**.
 ## Phase 6 — Extended Sensors
 
 ### Goal
-BME680 environmental data streaming, and RealSense depth integrated into Nav2 as a voxel costmap layer.
+BME680 environmental data streaming, RealSense depth integrated into Nav2 as a voxel costmap layer, and OLED status display running on the Pi.
 
 ### Files to create / modify
 
@@ -354,6 +355,7 @@ BME680 environmental data streaming, and RealSense depth integrated into Nav2 as
 | `firmware/esp32/include/env_sensor.h` | BME680 interface |
 | `src/robot_msgs/msg/EnvData.msg` | Custom message for BME680 data |
 | `src/robot_bringup/config/nav2_params.yaml` | Enable voxel_layer with RealSense |
+| `scripts/oled_status.py` | Pi OLED status display script |
 
 ### Step-by-step
 
@@ -363,12 +365,18 @@ Wire BME680 to I2C bus (addr 0x76). Read temperature, humidity, pressure, gas re
 **Step 6.2 — RealSense voxel layer**
 In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. Subscribe to `/camera/depth/points`. Tune height range to detect obstacles between 0.05 m and 1.5 m above floor.
 
+**Step 6.3 — OLED status display**
+Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md` and `docs/hardware/raspberry_pi_5.md`. Enable SPI via `raspi-config`. Create `scripts/oled_status.py` that reads `/battery_state` and topic rates, then renders a 128×64 status frame using Pillow and pushes it over SPI at ~1 Hz.
+
+Hardware reference: [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
+
 ### Validation gate — Phase 6
 
 ```bash
 ros2 topic echo /env_data --once    # must show plausible temp/humidity/pressure
 ros2 topic hz /camera/depth/points  # still ~15 Hz
 # In RViz2: 3D obstacle visible in local costmap when object held in front of camera
+python3 scripts/oled_status.py      # OLED shows IP, battery, topic rates, CPU
 ```
 
 ---

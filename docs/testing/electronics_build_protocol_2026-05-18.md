@@ -938,7 +938,88 @@ lsusb -t   # look for D435 at 5000M — if it shows 480M it's USB 2.0
 
 ---
 
-## Gate 13 — Full Electronics Bench Test
+## Gate 13 — Waveshare 2.42" OLED Display
+
+**What you're adding:** Waveshare 2.42inch OLED Module (SSD1309, 128×64) connected to Raspberry Pi via SPI0.
+
+**Hardware reference:** [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
+
+### Software setup
+
+**Step 1 — Enable SPI on the Pi:**
+```bash
+sudo raspi-config
+# → Interface Options → SPI → Yes → Finish → reboot
+```
+
+Verify after reboot:
+```bash
+ls /dev/spidev*   # must show /dev/spidev0.0
+```
+
+**Step 2 — Install Python dependencies:**
+```bash
+sudo apt update
+sudo apt install python3-pip python3-pil python3-spidev python3-smbus -y
+pip3 install lgpio
+```
+
+> Use `lgpio` — not bcm2835 or WiringPi, which do not work on Raspberry Pi 5 / Ubuntu 22.04.
+
+**Step 3 — Download Waveshare demo code:**
+
+Library source: https://github.com/waveshare/2.42inch-OLED-Module
+
+```bash
+git clone https://github.com/waveshare/2.42inch-OLED-Module.git ~/oled_demo
+cd ~/oled_demo/RaspberryPi/python/
+```
+
+**Step 4 — Run the test script:**
+```bash
+sudo python3 OLED_2in42_test.py
+```
+
+The display must cycle through: text, shapes, and a logo image.
+
+**Wiring (SPI0 — confirmed pin assignments):**
+
+| OLED Pin | Pi BCM GPIO | Pi Board Pin |
+|---|---|---|
+| VCC | 3.3V | Pin 1 |
+| GND | GND | Pin 6 |
+| DIN | GPIO 10 | Pin 19 (SPI0_MOSI) |
+| CLK | GPIO 11 | Pin 23 (SPI0_SCLK) |
+| CS | GPIO 8 | Pin 24 (SPI0_CE0) |
+| DC | GPIO 25 | Pin 22 |
+| RST | GPIO 27 | Pin 13 |
+
+⚠️ DC pin is board pin 22. Board pin 21 (same row, adjacent column) is MISO — wrong pin = blank display with no error.
+
+**Tests:**
+1. Power off Pi, wire OLED per table above.
+2. Power on Pi — verify no smoke, display connector is not hot.
+3. Run `OLED_2in42_test.py` — demo must complete all frames.
+4. Verify all prior USB devices still enumerate (`ls /dev/ttyACM0`, `/dev/rplidar`, `lsusb | grep Intel`).
+
+**Pass criteria:**
+- [ ] `/dev/spidev0.0` present after reboot
+- [ ] OLED demo runs: text and shapes visible on display
+- [ ] Pi still reachable over SSH during and after display test
+- [ ] ESP32 and LiDAR still present on their device paths simultaneously
+
+**Common failures:**
+
+| Symptom | Likely Cause |
+|---|---|
+| Blank display, no error | DC or RES on wrong pin — verify board pin 22 vs 21 |
+| `/dev/spidev0.0` missing | SPI not enabled — re-run `raspi-config` and reboot |
+| `ImportError: lgpio` | Run `pip3 install lgpio` |
+| Partial / garbled image | VCC is 5V through a resistor that's too high — use Pi 3.3V pin directly |
+
+---
+
+## Gate 14 — Full Electronics Bench Test
 
 **What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
@@ -1013,7 +1094,7 @@ watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20
 - [ ] Supply voltage stable (no sag below 10.5V under full load)
 - [ ] No component overheating after 5-minute run
 
-**Gate 13 pass = electronics build complete. Proceed to Phase 2 of [`build_plan.md`](../architecture/build_plan.md).**
+**Gate 14 pass = electronics build complete. Proceed to Phase 2 of [`build_plan.md`](../architecture/build_plan.md).**
 
 ---
 

@@ -42,6 +42,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 | Env sensor | BME680 breakout | I2C GPIO 8/9, addr 0x76 — **not yet wired** | ESP32 |
 | 2D LiDAR | Slamtec RPLidar A1 M8 | USB 2.0 → Pi `/dev/rplidar` | Pi |
 | RGB-D camera | Intel RealSense D435 | USB 3.0 → Pi (640×480 @ 15fps, RSUSB) | Pi |
+| OLED display | Waveshare 2.42" OLED (SSD1309) | SPI0 GPIO 10/11/8/25/27 → Pi — **not yet wired** | Pi |
 
 ---
 
