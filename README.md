@@ -112,12 +112,13 @@ Files follow the naming convention `<type>_<YYYY-MM-DD>.md`. Protocols describe 
 
 1. Reliable motor control (PID + encoders via micro-ROS)
 2. Stable odometry (EKF tuned)
-3. Reliable SLAM (clean map)
-4. Correct TF tree (validated in RViz2)
-5. Nav2 autonomous navigation
-6. RealSense voxel costmap fusion
-7. BME680 environmental sensing
-8. Semantic perception (YOLO)
+3. LiDAR driver + clean /scan data (RPLidar A1)
+4. Reliable SLAM (clean map)
+5. Correct TF tree (validated in RViz2)
+6. Nav2 autonomous navigation
+7. RealSense voxel costmap fusion
+8. BME680 environmental sensing
+9. Semantic perception (YOLO)
 
 ---
 
