@@ -16,7 +16,7 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 
 | Phase | Status |
 |---|---|
-| 0 — Hardware & Environment | Complete |
+| 0 — Hardware & Environment | In progress — see electronics build protocol |
 | 1 — ESP32 Firmware | Not started |
 | 2 — ROS 2 Foundation (URDF + TF) | Not started |
 | 3 — Sensor Bridge & EKF | Not started |
@@ -29,15 +29,20 @@ Update the table above as each phase completes.
 
 ---
 
-## Phase 0 — Hardware & Environment (Complete)
+## Phase 0 — Hardware & Environment
 
-Hardware is assembled and confirmed per CLAUDE.md. Dev environment is ready. No code action required.
+Follow the component-by-component electronics build protocol before starting Phase 1:
 
-Confirmed:
+**[`docs/testing/electronics_build_protocol_2026-05-18.md`](../testing/electronics_build_protocol_2026-05-18.md)**
+
+The protocol covers 13 gates — one component added and tested at a time — ending with a full bench test of all electronics running simultaneously. Phase 0 is complete when Gate 13 passes.
+
+Phase 0 is complete when:
 - All hardware wired per GPIO map in CLAUDE.md
-- GPIO 40/41 EMI caps installed on breadboard
-- Common ground verified
+- GPIO 40/41 EMI caps confirmed working (Gate 8)
+- Common ground verified across all components
 - Pi reachable over SSH, `/dev/ttyACM0` present, `/dev/rplidar` present
+- All ROS topics publishing at expected rates with full system powered (Gate 13)
 
 ---
 
