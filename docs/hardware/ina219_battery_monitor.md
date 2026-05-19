@@ -25,44 +25,21 @@ The battery monitor operates **independently of ROS, Wi-Fi, and the development 
 
 ---
 
-## Wiring — Confirmed Pin Assignments
+## Breakout Pinout
 
-**Breakout board:** Adafruit INA219 (product #904) — onboard 0.1 Ω precision shunt resistor, measures up to ±3.2A.
+**Breakout board:** Adafruit INA219 (product #904) — onboard 0.1 Ω precision shunt resistor, measures up to ±3.2A. No external shunt needed.
 
-### Breakout Pinout
+| Pin | Description |
+|---|---|
+| VCC | Logic power 3–5V |
+| GND | Ground |
+| SDA | I2C data |
+| SCL | I2C clock |
+| VIN+ | High-side + input (connect toward battery +) |
+| VIN− | High-side − input (connect toward load) |
+| A0, A1 | Address select — both open/GND = **0x40** |
 
-```
-        Adafruit INA219 Breakout
-   ┌─────────────────────────────┐
-   │  VCC  │ Logic power 3–5V   │
-   │  GND  │ Ground              │
-   │  SDA  │ I2C data            │
-   │  SCL  │ I2C clock           │
-   │  VIN+ │ High-side + input   │──→ Battery +
-   │  VIN− │ High-side − input   │──→ Load +
-   └─────────────────────────────┘
-```
-
-Current flows **from VIN+ through the 0.1 Ω shunt to VIN−**. Place in series with the positive supply rail.
-
-### Connection to ESP32-S3
-
-| INA219 Pin | ESP32-S3 GPIO | Notes |
-|---|---|---|
-| VCC | 3V3 | |
-| GND | GND | Shared common ground |
-| SDA | GPIO 8 | Shared I2C bus with BNO055 |
-| SCL | GPIO 9 | Shared I2C bus with BNO055 |
-| A0, A1 | — | Not wired → address **0x40** |
-| VIN+ | Battery positive rail | High-side current sense input |
-| VIN− | Load positive (after shunt) | To TB6612 VM and Pi power |
-
-I2C address: **0x40** (A0/A1 open = default).
-Shares bus with: BNO055 (0x28) — confirmed simultaneously at 11.4V / ~50 mA on bench.
-
-### Shunt Resistor
-
-Onboard 0.1 Ω, 1% precision resistor. Max measurable current: **±3.2A** at default gain (0.8 mA resolution). No external shunt needed.
+Current flows from VIN+ through the onboard 0.1 Ω shunt to VIN−. Place the INA219 in series with the positive supply rail. I2C address: **0x40**. Shares bus with BNO055 (0x28).
 
 ---
 

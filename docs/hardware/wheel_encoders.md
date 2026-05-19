@@ -14,12 +14,10 @@ Quadrature encoders (2-channel, A + B per wheel) provide:
 
 ---
 
-## Wiring — Confirmed Pin Assignments
+## Encoder Harness (JGA25-371 6-wire)
 
 **Motor/encoder model:** DC 12V JGA25-371, 45:1 gear ratio (Amazon listing says 34:1 — inaccurate).
 Encoder: 11 PPR at motor shaft. Effective CPR with 2× quadrature decoding: **1010** (validated).
-
-### Encoder Wire Colors (JGA25-371 6-wire harness)
 
 | Wire Color | Function |
 |---|---|
@@ -30,24 +28,15 @@ Encoder: 11 PPR at motor shaft. Effective CPR with 2× quadrature decoding: **10
 | Yellow | Encoder channel A |
 | Green | Encoder channel B |
 
-Blue (encoder VCC) is powered from ESP32 3V3. Encoder output signals are 3.3V compatible — no level shifter needed.
+Encoder output is 3.3V compatible — no level shifter needed. Encoder VCC powered from ESP32 3V3.
 
-### Connection to ESP32-S3
+ISR direction logic: Left `A == B on CHANGE` → forward (+) | Right `A != B on CHANGE` → forward (+)
 
-Pins configured `INPUT_PULLUP`. Interrupt fires on CHANGE of the A channel only.
+GPIO assignments: GPIO 40/41 = Left A/B | GPIO 42/39 = Right A/B. See `docs/hardware/esp32_s3.md`.
 
-| ESP32 GPIO | Signal | Function |
-|---|---|---|
-| GPIO 40 | Left encoder A | `attachInterrupt` CHANGE |
-| GPIO 41 | Left encoder B | Read in ISR for direction |
-| GPIO 42 | Right encoder A | `attachInterrupt` CHANGE |
-| GPIO 39 | Right encoder B | Read in ISR for direction |
+> ⚠️ GPIO 40/41 pick up 1 kHz PWM noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` in firmware. Hardware fix: 100 nF ceramic caps on GPIO 40 and 41 to GND, placed close to the ESP32 pins.
 
-ISR direction logic (validated):
-- Left: `A == B on CHANGE` → forward (+)
-- Right: `A != B on CHANGE` → forward (+)
-
-### Key Constants
+## Key Constants
 
 | Parameter | Value | Source |
 |---|---|---|

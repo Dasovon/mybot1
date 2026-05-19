@@ -34,35 +34,15 @@ The Raspberry Pi 5 is the onboard compute node. It acts as the sensor bridge bet
 
 ---
 
-## Wiring — Confirmed Connections
-
-Power is provided by the **RPI5 PD Power Hat** via USB PD 3.0 (5.15V/5A) to the Pi 5 USB-C power port. See [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md).
-
-### USB Device Assignments
+## USB Device Assignments
 
 | Device | Pi USB Port | Device Path | Notes |
 |---|---|---|---|
 | ESP32-S3 | USB-A (any) | `/dev/serial/by-id/usb-Espressif_USB_JTAG_...` | micro-ROS serial transport |
-| RPLidar A1 | USB-A (USB 2.0) | `/dev/rplidar` (udev symlink) | CP2102, VID:10c4 PID:ea60 |
-| RealSense D435 | USB-A (**USB 3.0 — blue**) | Managed by librealsense | Requires USB 3.0 bandwidth |
+| RPLidar A1 | USB-A (USB 2.0 OK) | `/dev/rplidar` (udev symlink) | CP2102, VID:10c4 PID:ea60 |
+| RealSense D435 | USB-A (**USB 3.0 — blue**) | Managed by librealsense | **Must be USB 3.0** — USB 2.0 bandwidth insufficient |
 
-### Common Ground
-
-Pi GND (via power hat) → Battery −, ESP32 GND, TB6612 GND, encoder GND, sensor GND — all on one common rail.
-
-### SPI0 — Waveshare 2.42" OLED (if fitted)
-
-| OLED Pin | Pi BCM GPIO | Pi Board Pin |
-|---|---|---|
-| VCC | 3.3V | Pin 1 |
-| GND | GND | Pin 6 |
-| DIN | GPIO 10 | Pin 19 (SPI0_MOSI) |
-| CLK | GPIO 11 | Pin 23 (SPI0_SCLK) |
-| CS | GPIO 8 | Pin 24 (SPI0_CE0) |
-| DC | GPIO 25 | Pin 22 |
-| RST | GPIO 27 | Pin 13 |
-
-> DC pin is **right column of board row 11 (pin 22)**. Left column of same row is GPIO9/MISO (pin 21) — wrong pin = silent failure.
+Power is provided by the **RPI5 PD Power Hat** via USB PD 3.0 (5.15V/5A) to the Pi 5 USB-C power port. See [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md).
 
 ---
 

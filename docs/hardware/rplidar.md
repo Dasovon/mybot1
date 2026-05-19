@@ -20,22 +20,14 @@ Update this file with your specific model once confirmed.
 
 ---
 
-## Wiring — Confirmed Connections
+## Connection Notes
 
-**Model confirmed:** RPLidar A1 M8 (Slamtec).
-
-```
-RPLidar A1 M8
-    └── USB adapter (CP2102, VID:10c4 PID:ea60)
-            └── Raspberry Pi USB 2.0 port
-                    /dev/rplidar  (udev symlink)
-```
+**Model:** RPLidar A1 M8 (Slamtec). Connects to Raspberry Pi via USB (CP2102 adapter, VID:10c4 PID:ea60).
 
 | Property | Value |
 |---|---|
-| Interface | USB (via CP2102 USB-serial adapter) |
-| Connected to | Raspberry Pi 5 USB 2.0 port |
-| Baud rate | **115200** (must be set explicitly — default in some driver versions is wrong) |
+| Interface | USB via CP2102 USB-serial adapter |
+| Baud rate | **115200** — must be set explicitly (driver default in some versions is wrong) |
 | udev symlink | `/dev/rplidar` |
 | Power | Bus-powered via USB (5V, ~400 mA) |
 

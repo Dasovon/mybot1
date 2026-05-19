@@ -36,74 +36,33 @@ The ESP32-S3 is the embedded base controller. It runs independently of ROS and t
 
 ---
 
-## Wiring — Confirmed Pin Assignments
+## GPIO Function Map
 
-**Board:** ESP32-S3-DevKitC-1 on Lonely Binary ESP32-S3 expansion board.
 All GPIO is 3.3V logic. 3V3 pin powers TB6612 logic, BNO055, INA219, and BME680 directly — no level shifter needed.
 
-### I2C Bus — GPIO 8 / 9
-
-```
-SDA → GPIO 8
-SCL → GPIO 9
-
-ESP32-S3 I2C Bus
-├── BNO055  (addr 0x28 — ADR pin unconnected)
-├── INA219  (addr 0x40 — A0/A1 unconnected)
-└── BME680  (addr 0x76 — SDO to GND)  ← new sensor, not yet wired
-```
-
-The Adafruit BNO055 and INA219 breakouts both have onboard pull-ups — no external pull-ups needed on this bus.
-
-### TB6612FNG Motor Driver — GPIO 10–15
-
-Motor A (PWMA/AIN1/AIN2) = **RIGHT** | Motor B (PWMB/BIN1/BIN2) = **LEFT**
-
-| ESP32 GPIO | TB6612 Pin | Function | LEDC |
-|---|---|---|---|
-| GPIO 10 | PWMA | Right motor speed (PWM) | ch 0 |
-| GPIO 11 | AIN1 | Right motor direction A | — |
-| GPIO 12 | AIN2 | Right motor direction B | — |
-| GPIO 13 | PWMB | Left motor speed (PWM) | ch 1 |
-| GPIO 14 | BIN1 | Left motor direction A | — |
-| GPIO 15 | BIN2 | Left motor direction B | — |
-| 3V3 | VCC | TB6612 logic supply | — |
-| GND | GND | Common ground | — |
-
-STBY → **not wired** — Adafruit breakout has onboard 10 kΩ pull-up (defaults HIGH = enabled).
-
-PWM config: `ledcSetup(ch, 1000, 8)` — 1 kHz, 8-bit (0–255).
-
-### Wheel Encoders — GPIO 39–42
-
-Pins configured `INPUT_PULLUP`. Interrupt fires on CHANGE of the A channel only.
-
-| ESP32 GPIO | Signal | ISR role |
+| GPIO | Function | Notes |
 |---|---|---|
-| GPIO 40 | Left encoder A | `attachInterrupt` CHANGE |
-| GPIO 41 | Left encoder B | Read in ISR |
-| GPIO 42 | Right encoder A | `attachInterrupt` CHANGE |
-| GPIO 39 | Right encoder B | Read in ISR |
+| 8 | I2C SDA | BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
+| 9 | I2C SCL | Adafruit breakouts have onboard pull-ups — no external needed |
+| 10 | PWMA — Right motor speed | LEDC ch 0, 1 kHz, 8-bit |
+| 11 | AIN1 — Right motor direction A | Motor A = RIGHT |
+| 12 | AIN2 — Right motor direction B | |
+| 13 | PWMB — Left motor speed | LEDC ch 1, 1 kHz, 8-bit |
+| 14 | BIN1 — Left motor direction A | Motor B = LEFT |
+| 15 | BIN2 — Left motor direction B | |
+| 19, 20 | Native USB D−/D+ | HWCDC micro-ROS transport to Pi |
+| 39 | Right encoder B | Read in ISR |
+| 40 | Left encoder A | `attachInterrupt` CHANGE ⚠️ EMI |
+| 41 | Left encoder B | Read in ISR ⚠️ EMI |
+| 42 | Right encoder A | `attachInterrupt` CHANGE |
 
-ISR direction logic:
-- Left: `A == B on CHANGE` → forward (+)
-- Right: `A != B on CHANGE` → forward (+)
+ISR direction logic: Left `A == B on CHANGE` → forward (+) | Right `A != B on CHANGE` → forward (+)
 
-Constants: `ENC_CPR = 1010`, `wheel_radius = 0.034 m`, `wheel_separation = 0.179 m`
+STBY not wired — Adafruit TB6612 breakout has onboard 10 kΩ pull-up (always enabled).
 
-### micro-ROS Serial Transport — GPIO 19 / 20 (native USB)
+⚠️ **GPIO 40/41 EMI:** Pick up 1 kHz PWM noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` attenuates in firmware. Hardware fix: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND, placed close to the ESP32 pins.
 
-ESP32-S3 native USB HWCDC → USB cable → Raspberry Pi 5 `/dev/ttyACM0`
-
-Stable by-id path: `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_58:E6:C5:5C:23:1C-if00`
-
-Required build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`
-
-Wi-Fi used only for OTA flashing and TelnetStream monitoring — **not** for micro-ROS.
-
-### Common Ground
-
-ESP32 GND → Battery −, Pi GND, TB6612 GND, encoder GND, sensor GND — all on one rail.
+micro-ROS transport: native USB HWCDC → Pi `/dev/ttyACM0`. Build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`.
 
 ### Pins to Avoid (ESP32-S3 expansion base)
 

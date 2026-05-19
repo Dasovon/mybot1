@@ -20,28 +20,26 @@ The TB6612FNG drives both DC motors using PWM signals from the ESP32-S3. It hand
 
 ---
 
-## Wiring — Confirmed Pin Assignments (ESP32-S3 production stack)
+## Breakout Pinout
 
-**Breakout board:** Adafruit TB6612FNG (product #2448).
-STBY → **not wired** — Adafruit breakout has onboard 10 kΩ pull-up (defaults HIGH = enabled).
+**Breakout board:** Adafruit TB6612FNG (product #2448). STBY has onboard 10 kΩ pull-up (defaults HIGH = enabled — do not wire STBY).
+
 Motor A = **RIGHT** | Motor B = **LEFT**
 
-| TB6612 Pin | ESP32 GPIO | Function |
-|---|---|---|
-| VCC | 3V3 | Logic supply (3.3V — no level shifter needed) |
-| VM | Battery V+ (via PD Hat VIN) | Motor power supply |
-| GND | GND | Common ground |
-| PWMA | GPIO 10 | Right motor speed (PWM, LEDC ch 0, 1 kHz 8-bit) |
-| AIN1 | GPIO 11 | Right motor direction A |
-| AIN2 | GPIO 12 | Right motor direction B |
-| PWMB | GPIO 13 | Left motor speed (PWM, LEDC ch 1, 1 kHz 8-bit) |
-| BIN1 | GPIO 14 | Left motor direction A |
-| BIN2 | GPIO 15 | Left motor direction B |
-| STBY | — | Not wired — onboard pull-up enabled |
-| AO1, AO2 | Right motor terminals | Both wires on MOTORA pads (not the GND pad between sections) |
-| BO1, BO2 | Left motor terminals | Both wires on MOTORB pads (not the GND pad between sections) |
+| Pin | Function |
+|---|---|
+| VCC | Logic supply (2.7–5.5V) |
+| VM | Motor supply (2.5–13.5V) — connect to battery voltage |
+| GND | Ground |
+| PWMA | Right motor speed (PWM input) |
+| AIN1, AIN2 | Right motor direction |
+| AO1, AO2 | Right motor output — connect to right motor terminals |
+| PWMB | Left motor speed (PWM input) |
+| BIN1, BIN2 | Left motor direction |
+| BO1, BO2 | Left motor output — connect to left motor terminals |
+| STBY | Motor enable — not wired, pulled HIGH by onboard resistor |
 
-> ⚠️ **Warning:** Max safe logic input on the ESP32 3.3V stack is **3.8V**. If the 12V VM wire ever bridges to any signal pin (AIN1/AIN2/BIN1/BIN2), the input gates will be destroyed instantly. Verify VM has no breadboard or wiring path to any signal pin before powering.
+> ⚠️ VM carries battery voltage (12V+). If it bridges to any logic signal pin (AIN1/AIN2/BIN1/BIN2), the ESP32 GPIO is destroyed instantly. Keep VM wiring physically separate from signal wiring.
 
 ### Motor Direction Truth Table
 
@@ -62,11 +60,10 @@ Motor A = **RIGHT** | Motor B = **LEFT**
 
 ---
 
-## Wiring Notes
+## Power Notes
 
-- All grounds (ESP32, TB6612, battery, Pi) must share a common ground.
-- Decouple VM with a 100µF electrolytic + 100nF ceramic capacitor close to the VM/GND pins.
-- Keep motor wiring short and away from I2C/serial signal lines to minimize noise.
+- VM decoupling: 100µF electrolytic + 100nF ceramic in parallel, placed close to the VM and GND pins.
+- Keep motor output wires (AO1/AO2, BO1/BO2) short and physically separated from signal wires.
 
 ---
 

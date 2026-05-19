@@ -24,6 +24,34 @@ Install these on your **development PC** before starting. The Pi and ESP32 softw
 
 ---
 
+## Power & Ground Wiring Principles
+
+These principles apply at every gate. Read them once before starting.
+
+### Common ground — non-negotiable
+Battery negative, power hat GND, Pi GND, ESP32 GND, TB6612 GND, and every sensor GND share one ground bus. Run each component's ground wire directly to that bus — never daisy-chain grounds through another component.
+
+### Motor power vs logic power — keep them separate
+Motor current is high, switching, and noisy. Logic current is low and clean. The two rails share only the ground bus:
+- **Motor power path**: Battery → hat VIN screw terminal → TB6612 VM. Heavy gauge wire. No logic components on this path.
+- **Logic power path**: Battery → hat USB-C → Pi 5V → USB-A → ESP32 3.3V → sensors. Light gauge, clean rail.
+Do not route motor power and logic power through the same wire or terminal.
+
+### Decoupling capacitors — place as you add each component
+- **TB6612 VM/GND**: 100µF electrolytic + 100nF ceramic in parallel, close to the VM and GND pins.
+- **Each I2C sensor VCC**: 100nF ceramic close to the sensor's VCC pin.
+- **GPIO 40/41 (left encoder only)**: 100nF ceramic from each GPIO line to GND, placed on the breadboard as close to the ESP32 pin as possible. These GPIOs pick up 1 kHz motor PWM noise and caps are not optional.
+
+### Cable routing
+- Motor power cables and signal cables (I2C, encoder, USB) must travel separately.
+- Keep encoder signal wires short and away from motor wiring.
+- Keep I2C wires under 30 cm — long wires add capacitance and cause reliability issues at 400 kHz.
+
+### Measure before connecting
+At each gate: power on and measure voltage at the new component's power pin before making any signal connections. Correct voltage → proceed. Wrong voltage → stop and trace back.
+
+---
+
 ## Gate 1 — Power Hat + Bench Supply
 
 **What you're adding:** RPI5 PD Power Hat P01 connected to bench power supply (or LiPo battery).
@@ -161,10 +189,6 @@ Add to `~/.bashrc` so it loads on every login:
 echo "source ~/microros_ws/install/local_setup.bash" >> ~/.bashrc
 ```
 
-**Wiring:**
-- USB-C cable: hat USB-C output → Pi USB-C power input.
-- Nothing else connected yet.
-
 **Tests:**
 ```bash
 vcgencmd measure_volts core   # expect ~0.9–1.1V
@@ -234,9 +258,7 @@ void loop() { digitalWrite(38, HIGH); delay(500); digitalWrite(38, LOW); delay(5
 
 In VS Code: click the PlatformIO **Upload** button (→ arrow in the bottom toolbar). If it asks for a port, select the ESP32's USB device.
 
-**Wiring:**
-- USB-A to USB-C cable: Pi USB-A → ESP32 native USB port (not the UART/debug port — check the silkscreen label).
-- No other connections yet.
+⚠️ Use the **native USB port** on the ESP32, not the UART/debug port — check the silkscreen label.
 
 **Tests on Pi:**
 ```bash
@@ -310,19 +332,6 @@ Upload with PlatformIO. Monitor via:
 screen /dev/ttyACM0 115200
 ```
 
-**Wiring:**
-- TB6612 `VCC` (logic) → ESP32 `3V3` pin
-- TB6612 `GND` → common ground rail
-- TB6612 `PWMA` → ESP32 GPIO 10
-- TB6612 `AIN1` → ESP32 GPIO 11
-- TB6612 `AIN2` → ESP32 GPIO 12
-- TB6612 `PWMB` → ESP32 GPIO 13
-- TB6612 `BIN1` → ESP32 GPIO 14
-- TB6612 `BIN2` → ESP32 GPIO 15
-- TB6612 `STBY` — **leave unconnected** (Adafruit breakout has onboard 10kΩ pull-up)
-- TB6612 `VM` — **leave unconnected** for now
-- TB6612 `AO1`, `AO2`, `BO1`, `BO2` — **leave unconnected** for now
-
 **Tests:**
 1. Measure TB6612 `VCC` pin → expect 3.3V.
 2. Measure TB6612 `STBY` pin → expect 3.3V (pulled high by onboard resistor).
@@ -395,13 +404,7 @@ void loop() {
 }
 ```
 
-**Wiring:**
-- Battery `+` (or supply ~12V) → TB6612 `VM` via VIN screw terminal on power hat
-- Battery `−` → common ground rail
-- Right motor terminals → TB6612 `AO1` and `AO2`
-- Left motor — **leave disconnected** for now
-
-Measure VM on TB6612 before connecting the motor → must match supply voltage.
+⚠️ Measure VM on TB6612 before connecting the motor — it must match supply voltage.
 
 **Tests:**
 1. Upload sketch. Open serial monitor (`screen /dev/ttyACM0 115200`).
@@ -469,9 +472,6 @@ void loop() {
 }
 ```
 
-**Wiring:**
-- Left motor terminals → TB6612 `BO1` and `BO2`
-
 **Tests:**
 1. Both motors forward → robot moves straight (or close to it).
 2. One forward, one reverse → rotates in place.
@@ -528,13 +528,6 @@ Upload via PlatformIO. Monitor on Pi:
 ```bash
 screen /dev/ttyACM0 115200
 ```
-
-**Wiring (JGA25-371 wire colors):**
-- Red / White → motor power (already connected)
-- Blue → ESP32 3.3V
-- Black → common ground
-- Yellow (Ch A) → ESP32 GPIO 42
-- Green (Ch B) → ESP32 GPIO 39
 
 **Tests:**
 1. Rotate right wheel one full revolution by hand. Count must reach **1010 ±50**.
@@ -602,13 +595,6 @@ void loop() {
     delay(100);
 }
 ```
-
-**Wiring:**
-- Yellow (Ch A) → 100nF ceramic cap to GND on breadboard → ESP32 GPIO 40
-- Green (Ch B) → 100nF ceramic cap to GND on breadboard → ESP32 GPIO 41
-- Blue → 3.3V, Black → GND
-
-Route encoder wires away from motor power wires.
 
 **Tests:**
 1. Rotate left wheel one full revolution by hand → count = 1010 ±50.
@@ -683,13 +669,6 @@ void loop() {
 }
 ```
 
-**Wiring:**
-- BNO055 `VIN` → ESP32 3.3V
-- BNO055 `GND` → common ground
-- BNO055 `SDA` → ESP32 GPIO 8
-- BNO055 `SCL` → ESP32 GPIO 9
-- BNO055 `ADR` → GND (I2C address = 0x28)
-
 **Tests:**
 1. Upload sketch. Open serial monitor.
 2. `BNO055 ready` must print — if not, init failed.
@@ -759,15 +738,6 @@ void loop() {
     delay(500);
 }
 ```
-
-**Wiring:**
-- INA219 `VCC` → ESP32 3.3V
-- INA219 `GND` → common ground
-- INA219 `SDA` → ESP32 GPIO 8 (shared with BNO055)
-- INA219 `SCL` → ESP32 GPIO 9 (shared with BNO055)
-- INA219 `A0`, `A1` → GND (address = 0x40)
-- INA219 `VIN+` → battery/supply positive
-- INA219 `VIN-` → downstream load, or short to VIN+ for bench test
 
 **Tests:**
 1. Upload sketch. Both `ready` messages must appear.
@@ -845,9 +815,6 @@ rviz2
 # Add → By topic → /scan → LaserScan
 ```
 
-**Wiring:**
-- USB-A cable: Pi USB-A port → RPLidar USB adapter
-
 **Pass criteria:**
 - [ ] `/dev/rplidar` appears after udev rule
 - [ ] `/scan` publishes at ~5.5 Hz
@@ -918,9 +885,7 @@ Check USB is SuperSpeed (USB 3.0):
 lsusb -t   # look for D435 at 5000M — if it shows 480M it's USB 2.0
 ```
 
-**Wiring:**
-- USB-A (3.0) cable: Pi USB 3.0 port → RealSense D435
-- ⚠️ Must use USB 3.0 — USB 2.0 bandwidth is insufficient.
+⚠️ RealSense requires a USB 3.0 port — USB 2.0 bandwidth is insufficient.
 
 **Pass criteria:**
 - [ ] `rs-enumerate-devices` lists D435
@@ -982,22 +947,10 @@ sudo python3 OLED_2in42_test.py
 
 The display must cycle through: text, shapes, and a logo image.
 
-**Wiring (SPI0 — confirmed pin assignments):**
-
-| OLED Pin | Pi BCM GPIO | Pi Board Pin |
-|---|---|---|
-| VCC | 3.3V | Pin 1 |
-| GND | GND | Pin 6 |
-| DIN | GPIO 10 | Pin 19 (SPI0_MOSI) |
-| CLK | GPIO 11 | Pin 23 (SPI0_SCLK) |
-| CS | GPIO 8 | Pin 24 (SPI0_CE0) |
-| DC | GPIO 25 | Pin 22 |
-| RST | GPIO 27 | Pin 13 |
-
 ⚠️ DC pin is board pin 22. Board pin 21 (same row, adjacent column) is MISO — wrong pin = blank display with no error.
 
 **Tests:**
-1. Power off Pi, wire OLED per table above.
+1. Power off Pi. Wire the OLED to Pi SPI0 — pin functions in `docs/hardware/oled_display.md`.
 2. Power on Pi — verify no smoke, display connector is not hot.
 3. Run `OLED_2in42_test.py` — demo must complete all frames.
 4. Verify all prior USB devices still enumerate (`ls /dev/ttyACM0`, `/dev/rplidar`, `lsusb | grep Intel`).

@@ -23,37 +23,21 @@ The OLED display shows robot status information on the physical chassis — IP a
 
 ---
 
-## Wiring — Confirmed Pin Assignments
+## Pin Functions
 
-**Interface used in this build: 4-wire SPI (factory default)**
+**Interface used in this build: 4-wire SPI (factory default).** Connects to **Raspberry Pi 5**, not the ESP32.
 
-Connects to **Raspberry Pi 5**, not the ESP32.
-
-### Pin Functions
-
-| OLED Pin | Function in SPI mode | Function in I2C mode |
+| OLED Pin | SPI mode | I2C mode |
 |---|---|---|
 | VCC | Power 3.3V or 5V | Power 3.3V or 5V |
 | GND | Ground | Ground |
-| DIN | SPI MOSI (data in) | I2C SDA |
-| CLK | SPI SCLK | I2C SCL |
+| DIN | MOSI (data in) | SDA |
+| CLK | SCLK | SCL |
 | CS | SPI chip select (active low) | NC (tie to GND) |
-| DC | Data / command select (1=data, 0=cmd) | Address select (LOW=0x3C, HIGH=0x3D) |
+| DC | Data/cmd select (HIGH=data, LOW=cmd) | Address select (LOW=0x3C, HIGH=0x3D) |
 | RES | Reset (active low) | Reset (active low) |
 
-### Connection to Raspberry Pi 5 (SPI0)
-
-| OLED Pin | Pi BCM GPIO | Pi Board Pin | Notes |
-|---|---|---|---|
-| VCC | 3.3V | Pin 1 | Use 3.3V rail — avoids level shift |
-| GND | GND | Pin 6 | Common ground |
-| DIN | GPIO 10 | Pin 19 | SPI0 MOSI |
-| CLK | GPIO 11 | Pin 23 | SPI0 SCLK |
-| CS | GPIO 8 | Pin 24 | SPI0 CE0 |
-| DC | GPIO 25 | Pin 22 | Data/command select |
-| RES | GPIO 27 | Pin 13 | Hardware reset |
-
-> **DC pin is board pin 22 (right column, row 11).** Board pin 21 (same row, left column) is GPIO9/MISO — wrong pin = silent failure with no error message.
+> **DC pin warning:** DC and MISO are on adjacent pins in the same header row. Wrong pin = blank display, no error.
 
 ---
 

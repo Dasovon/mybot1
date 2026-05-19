@@ -78,11 +78,11 @@ TB6612 logic VCC → ESP32 3V3 pin (not from hat directly)
 
 ---
 
-## Wiring Notes
+## Notes
 
-- The Pi 5 **requires USB PD negotiation** to receive full power — do not use a standard USB-C cable without PD. The hat's USB-C output handles the PD handshake automatically.
-- The VIN passthrough provides raw battery voltage to the TB6612 VM pin — this is unregulated motor power.
-- All grounds (battery −, ESP32 GND, TB6612 GND, Pi GND via hat) must share a common ground rail.
+- The Pi 5 **requires USB PD negotiation** — the hat's USB-C output handles it automatically. Do not use a standard USB-C cable.
+- The VIN passthrough is unregulated motor power — connects to TB6612 VM, not logic components.
+- Add an inline fuse on the battery positive wire before the DC barrel input. No onboard fuse on this board.
 
 ---
 

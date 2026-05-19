@@ -20,42 +20,23 @@ The BNO055 provides absolute orientation, heading, and rotation rate. This data 
 
 ---
 
-## Wiring — Confirmed Pin Assignments
+## Breakout Pinout
 
-**Breakout board:** Adafruit BNO055 (product #2472) — has onboard level shifter and 10 kΩ I2C pull-ups.
-
-### Breakout Pinout
+**Breakout board:** Adafruit BNO055 (product #2472) — has onboard level shifter and 10 kΩ I2C pull-ups. No external pull-ups needed on this bus.
 
 | BNO055 Pin | Description |
 |---|---|
 | VIN | Power 3.3–5V (onboard regulator) |
 | 3VO | 3.3V output (~50 mA available) |
 | GND | Ground |
-| SDA | I2C data (onboard 10 kΩ pull-up — no external needed) |
-| SCL | I2C clock (onboard 10 kΩ pull-up — no external needed) |
+| SDA | I2C data (onboard 10 kΩ pull-up) |
+| SCL | I2C clock (onboard 10 kΩ pull-up) |
 | RST | Hardware reset (active low) |
 | INT | Interrupt output (3V logic) |
-| ADR | Address select: float/low = 0x28, high = 0x29 |
+| ADR | Address select: float/GND = 0x28, HIGH = 0x29 |
 | PS0, PS1 | Protocol mode — leave unconnected for I2C |
 
-### Connection to ESP32-S3
-
-| BNO055 Pin | ESP32-S3 GPIO | Notes |
-|---|---|---|
-| VIN | 3V3 | |
-| GND | GND | Shared common ground |
-| SDA | GPIO 8 | Shared I2C bus with INA219 |
-| SCL | GPIO 9 | Shared I2C bus with INA219 |
-| ADR | — | Not wired → address **0x28** |
-| RST, INT, PS0, PS1 | — | Not wired |
-
-I2C address: **0x28**
-Shares bus with: INA219 (0x40) — confirmed working simultaneously on bench.
-
-### Operating Mode
-
-**NDOF** (Nine Degrees Of Freedom) — full onboard sensor fusion.
-IMU orientation covariance `[0] = -1` so EKF ignores absolute heading (magnetometer unreliable on metal chassis). Angular velocity and linear acceleration are enabled.
+I2C address in this build: **0x28** (ADR → GND). Shares bus with INA219 (0x40).
 
 ---
 
