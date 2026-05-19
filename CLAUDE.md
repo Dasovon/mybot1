@@ -220,7 +220,8 @@ bot_ws/                               ← workspace root (this repo)
 │   │   ├── bme680_environmental.md
 │   │   └── wiring_audit.md
 │   ├── architecture/
-│   │   └── system_overview.md
+│   │   ├── system_overview.md
+│   │   └── build_plan.md         ← step-by-step build instructions for Claude Code
 │   └── testing/                      ← test protocols, validation checklists, audit reports
 ├── scripts/                          ← shell utility scripts (not ROS nodes)
 ├── .gitignore
@@ -331,16 +332,33 @@ EKF config notes: IMU orientation is **disabled** (magnetometer unreliable on me
 
 ---
 
-## Development Order
+## Build Plan
 
-1. Reliable motor control (PID + encoders confirmed working via micro-ROS)
-2. Stable odometry (`robot_localization` EKF tuned, `/odom` smooth)
-3. Reliable SLAM (clean map with `slam_toolbox`)
-4. Correct TF tree (URDF + static transforms validated in RViz2)
-5. Nav2 integration (autonomous point-to-point navigation)
-6. RealSense fusion (voxel costmap layer)
-7. BME680 environmental sensor (add to I2C bus, publish env data)
-8. Semantic perception (YOLO on dev PC GPU)
+The full step-by-step build plan — with files to create, implementation details, and validation gates — is in:
+
+**[`docs/architecture/build_plan.md`](docs/architecture/build_plan.md)**
+
+### Rules for Claude Code
+
+- **Read `build_plan.md` before starting any implementation work.** It is the authoritative source for what to build next.
+- **Follow phases in order.** Do not implement Phase N+1 until Phase N's validation gate passes.
+- **Update the status table** in `build_plan.md` when a phase completes.
+- **Do not change hardware constants** (GPIO pins, I2C addresses, topic names, frame IDs, encoder CPR, wheel dimensions) without explicit user instruction. These are validated hardware values.
+- **One thing at a time.** When debugging, change one variable (param, pin, config) and observe before changing another.
+- **Commit at phase boundaries** using the commit prefix convention in `build_plan.md`.
+
+### Development Order (summary)
+
+| Phase | Goal |
+|---|---|
+| 0 | Hardware & environment (complete) |
+| 1 | ESP32 firmware: PID, encoders, IMU, battery, micro-ROS, watchdog |
+| 2 | URDF + TF tree validated in RViz2 |
+| 3 | Sensor bridge, LiDAR, RealSense, EKF → smooth `/odom` |
+| 4 | SLAM: build and save a consistent 2D map |
+| 5 | Nav2: autonomous navigation — **MVP milestone** |
+| 6 | BME680 env sensor + RealSense voxel costmap |
+| 7 | Semantic perception (YOLO on dev PC GPU) |
 
 ---
 
