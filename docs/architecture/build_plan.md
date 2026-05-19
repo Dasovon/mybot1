@@ -1047,6 +1047,10 @@ Initialize on I2C (GPIO 8 SDA, GPIO 9 SCL, addr 0x28). Read linear acceleration 
 **Step 1.6 — Battery monitor (INA219)**
 Initialize on same I2C bus (addr 0x40). Read bus voltage and current at 1 Hz.
 
+**The INA219 read and `/battery_state` publish must run in their own dedicated FreeRTOS task** — not inside the motor/PID loop or the micro-ROS spin loop. This is a hard requirement learned from a prior build: when battery monitoring shares execution context with motor control, running a motor test (or any blocking operation) pauses battery updates. The battery task must be able to read and publish at 1 Hz regardless of what the motor, encoder, or IMU tasks are doing.
+
+Implementation rule: create a `battery_task` pinned to a core with its own `vTaskDelay(pdMS_TO_TICKS(1000))` cadence. Never call the INA219 read from `loop()` or from within the PID task.
+
 **Step 1.7 — Safety watchdog**
 If no `/diff_cont/cmd_vel_unstamped` message is received within 500 ms, call `motors_stop()`. Watchdog must run independently of micro-ROS connection state — use a hardware timer or FreeRTOS timer, not a ROS callback.
 
@@ -1073,7 +1077,19 @@ ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/Twist \
 # robot should move forward briefly, then stop after watchdog timeout
 ```
 
-Phase 1 is complete when all four checks pass.
+**Battery isolation check (required):** While the motors are actively spinning under a continuous velocity command, verify `/battery_state` keeps publishing without gaps:
+```bash
+# Terminal 1 — continuous drive command
+ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/Twist \
+  "{linear: {x: 0.2}, angular: {z: 0.0}}" --rate 20
+
+# Terminal 2 — battery must not skip beats during motor load
+ros2 topic hz /battery_state --window 30   # must hold ~1 Hz, no dropouts
+```
+
+If `/battery_state` drops out or pauses while motors run, the battery task is sharing execution context with the motor/PID loop — fix the FreeRTOS task structure before proceeding.
+
+Phase 1 is complete when all checks above pass, including the battery isolation check.
 
 ---
 
