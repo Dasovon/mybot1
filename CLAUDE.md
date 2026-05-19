@@ -219,8 +219,9 @@ bot_ws/                               ← workspace root (this repo)
 │   │   ├── ina219_battery_monitor.md
 │   │   ├── bme680_environmental.md
 │   │   └── wiring_audit.md
-│   └── architecture/
-│       └── system_overview.md
+│   ├── architecture/
+│   │   └── system_overview.md
+│   └── testing/                      ← test protocols, validation checklists, audit reports
 ├── scripts/                          ← shell utility scripts (not ROS nodes)
 ├── .gitignore
 └── CLAUDE.md                         ← this file
@@ -243,7 +244,27 @@ bot_ws/                               ← workspace root (this repo)
 | ESP32 firmware source | `firmware/esp32/src/` |
 | Hardware reference doc | `docs/hardware/` |
 | Architecture / design doc | `docs/architecture/` |
+| Test protocol, validation checklist, or audit report | `docs/testing/` |
 | Utility shell script | `scripts/` |
+
+---
+
+## docs/testing/ Rules
+
+This folder holds all test and validation documentation. Do not put test scripts here — those go in `src/<package>/test/`. This folder is for human-readable docs only.
+
+| Document type | Naming convention | Notes |
+|---|---|---|
+| Gate / MVP test protocol | `<feature>_test_protocol_<YYYY-MM-DD>.md` | Operator checklists with pass/fail gates |
+| Validation run log | `<feature>_validation_<YYYY-MM-DD>.md` | Recorded results from a specific test session |
+| Repo / system audit | `audit_<YYYY-MM-DD>.md` | Static analysis or manual code/hardware audit |
+| Definition of Done | `dod_<feature>.md` | Acceptance criteria for a subsystem or milestone |
+
+**Rules:**
+- Every file must have a date in the filename (`YYYY-MM-DD`).
+- Protocols describe *how* to test. Logs describe *what happened* during a test. Keep them separate.
+- Do not commit incomplete or in-progress logs — finish the run, then commit results.
+- Gate-style protocols (pass/fail per gate) are preferred over freeform notes.
 
 ---
 
