@@ -212,6 +212,21 @@ All three sensor streams (LiDAR, RealSense, IMU/odom from ESP32) active and fuse
 **Step 3.2 — LiDAR driver**
 Launch `rplidar_ros` with device `/dev/rplidar`. Frame ID must be `laser`. Expected rate: ~5.5 Hz on `/scan`.
 
+```bash
+ros2 run rplidar_ros rplidar_composition --ros-args \
+    -p serial_port:=/dev/rplidar \
+    -p serial_baudrate:=115200 \
+    -p frame_id:=laser \
+    -p angle_compensate:=true
+```
+
+**LiDAR must pass independently before continuing:**
+```bash
+ros2 topic hz /scan                       # must be ~5.5 Hz
+ros2 topic echo /scan --once | head -10   # ranges must not be all-zero or all-inf
+```
+Do not proceed to Step 3.3 until these pass.
+
 **Step 3.3 — RealSense driver**
 Launch `realsense2_camera` with:
 - Resolution: 640×480

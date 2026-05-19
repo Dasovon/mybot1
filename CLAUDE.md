@@ -355,8 +355,8 @@ The full step-by-step build plan — with files to create, implementation detail
 | 0 | Hardware & environment (complete) |
 | 1 | ESP32 firmware: PID, encoders, IMU, battery, micro-ROS, watchdog |
 | 2 | URDF + TF tree validated in RViz2 |
-| 3 | Sensor bridge, LiDAR, RealSense, EKF → smooth `/odom` |
-| 4 | SLAM: build and save a consistent 2D map |
+| 3 | Sensor bridge + **LiDAR verified on `/scan`** + RealSense + EKF → smooth `/odom` — LiDAR must pass before Phase 4 |
+| 4 | SLAM: build and save a consistent 2D map (requires Phase 3 LiDAR verified) |
 | 5 | Nav2: autonomous navigation — **MVP milestone** |
 | 6 | BME680 env sensor + RealSense voxel costmap |
 | 7 | Semantic perception (YOLO on dev PC GPU) |

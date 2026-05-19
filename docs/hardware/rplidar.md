@@ -6,17 +6,16 @@ The RPLIDAR provides 2D laser scan geometry used by `slam_toolbox` to build maps
 
 ---
 
-## Common Models
+## Model — Confirmed
 
-| Model | Range | Scan Rate | Points/Scan |
-|---|---|---|---|
-| A1M8 | 0.15–12 m | 5–10 Hz | ~360 |
-| A2M8 | 0.15–18 m | 10 Hz | ~720 |
-| A3M1 | 0.2–25 m | 10–15 Hz | ~16,000 |
-| C1 | 0.1–12 m | 10 Hz | ~7,200 |
-| S1 | 0.1–40 m | 10 Hz | ~8,192 |
+**RPLidar A1 M8** (Slamtec) — confirmed model in this build.
 
-Update this file with your specific model once confirmed.
+| Property | Value |
+|---|---|
+| Range | 0.15–12 m |
+| Scan rate | ~5.5 Hz (confirmed on this build) |
+| Points per scan | ~360 |
+| Interface | USB via CP2102 adapter |
 
 ---
 
@@ -54,15 +53,32 @@ sudo apt install ros-humble-rplidar-ros
 ```
 
 Published topic: `/scan` (`sensor_msgs/LaserScan`)
-Frame: `laser` (must match URDF)
+Frame ID: `laser` (must match URDF `laser` link)
 
-Launch example:
+Run node directly (used in build testing and bringup):
 
 ```bash
-ros2 launch rplidar_ros rplidar_launch.py \
-  serial_port:=/dev/rplidar \
-  frame_id:=laser
+ros2 run rplidar_ros rplidar_composition --ros-args \
+    -p serial_port:=/dev/rplidar \
+    -p serial_baudrate:=115200 \
+    -p frame_id:=laser \
+    -p angle_compensate:=true
 ```
+
+> `serial_baudrate` must be set explicitly — the driver default in some versions is wrong and causes a silent timeout.
+
+> `angle_compensate:=true` fills in scan gaps at low rotation speeds — always enable it.
+
+### Verify scan health
+
+```bash
+ros2 topic hz /scan                       # expect ~5.5 Hz
+ros2 topic echo /scan --once | head -30   # ranges must be non-zero, non-inf
+```
+
+### Motor enable
+
+The LiDAR motor is enabled by the `rplidar_ros` node via the USB adapter's DTR line. **The motor only spins while the node is running.** If the motor stops, the laser also stops — power-cycle the LiDAR and restart the node.
 
 ---
 
@@ -106,14 +122,3 @@ Key parameters to tune:
 
 ---
 
-## udev Rule
-
-```
-SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar"
-```
-
-Reload with:
-
-```bash
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
