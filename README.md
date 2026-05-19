@@ -56,7 +56,8 @@ bot_ws/
 │   └── esp32/                  # ESP32-S3 firmware (PlatformIO)
 ├── docs/
 │   ├── hardware/               # per-component hardware + wiring docs
-│   └── architecture/           # system architecture docs
+│   ├── architecture/           # system architecture docs
+│   └── testing/                # test protocols, validation logs, audit reports
 └── scripts/                    # utility shell scripts
 ```
 
@@ -96,6 +97,14 @@ bot_ws/
 Full pinouts, wiring, and notes for every component: [`docs/hardware/`](docs/hardware/README.md)
 
 Known wiring issues and improvement suggestions: [`docs/hardware/wiring_audit.md`](docs/hardware/wiring_audit.md)
+
+---
+
+## Testing Docs
+
+Gate-style test protocols, validation run logs, and audit reports: [`docs/testing/`](docs/testing/)
+
+Files follow the naming convention `<type>_<YYYY-MM-DD>.md`. Protocols describe how to test; logs record what happened during a run.
 
 ---
 
