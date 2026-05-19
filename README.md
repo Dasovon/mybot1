@@ -44,7 +44,7 @@ A distributed ROS 2 autonomous mobile robot (AMR) built on a proven hardware sta
 ## Repository Structure
 
 ```
-dev1_ws/
+bot_ws/
 ├── src/
 │   ├── esp32_serial_bridge/    # micro-ROS agent bridge node (Python)
 │   ├── robot_bringup/          # top-level launch files

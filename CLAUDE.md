@@ -158,7 +158,7 @@ map
 **Always follow this layout. Do not create files outside these locations without a documented reason.**
 
 ```
-dev1_ws/                              ← workspace root (this repo)
+bot_ws/                               ← workspace root (this repo)
 ├── src/                              ← all ROS 2 packages (colcon builds from here)
 │   ├── esp32_serial_bridge/          ← Python package: micro-ROS agent bridge node
 │   │   ├── esp32_serial_bridge/      ← Python module (node source)
