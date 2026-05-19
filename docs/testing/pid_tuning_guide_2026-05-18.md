@@ -13,7 +13,7 @@ The robot uses closed-loop PID velocity control on each wheel independently. The
 Each wheel has its own PID instance with its own gains (Kp, Ki, Kd). Tune them separately, then verify they track together.
 
 **Tuning order:**
-1. Open-loop characterization (no PID)
+1. Closed-loop system characterization
 2. P-only (Kp)
 3. PD (add Kd)
 4. Full PID (add Ki)
@@ -58,7 +58,7 @@ Before tuning can begin, the ESP32 firmware must:
    TELEM:<timestamp_ms>:<r_setpoint_rads>:<r_measured_rads>:<r_pwm>:<l_setpoint_rads>:<l_measured_rads>:<l_pwm>
    ```
 
-3. **Accept velocity setpoints independently per wheel** — for open-loop and per-wheel tests, allow setting right and left wheel targets independently (not just as a twist command).
+3. **Accept velocity setpoints independently per wheel** — for per-wheel tests, allow setting right and left wheel velocity targets independently (not just as a combined twist command).
 
 ---
 
@@ -91,59 +91,73 @@ python3 -m serial.tools.miniterm /dev/ttyACM0 115200
 
 ---
 
-## Stage 1 — Open-Loop Characterization
+## Stage 1 — Closed-Loop System Characterization
 
-**Goal:** Understand the motor's raw behavior before adding any control. Measure deadband, max velocity, and approximate time constant. This data informs initial Kp selection.
+**Goal:** With the PID active and encoders providing feedback, characterize the system's velocity range and step response. This data sets a rational starting point for Kp. The PID is running the entire time — no raw PWM mode, no disabling the controller.
 
-**What the Python tool will do:** Send a series of step PWM commands, record encoder velocity response, plot velocity vs. PWM curves, calculate deadband and Kmax.
+Start with a very low Kp (Ki = 0, Kd = 0). Low enough that the system responds slowly but does not oscillate. This gives clean, readable step responses to measure from.
+
+**Starting gains for this stage:**
+```
+Kp = 0.3
+Ki = 0.0
+Kd = 0.0
+```
+
+**What the Python tool will do:** Command a sweep of velocity setpoints, record encoder velocity via telemetry stream, plot setpoint vs. measured velocity curves, calculate minimum controllable velocity, max velocity, and time constant (τ).
 
 ### Manual procedure
 
-**Step 1.1 — Deadband measurement**
+**Step 1.1 — Minimum controllable velocity**
 
-Disable PID. Send raw PWM values from 0 upward in increments of 5. Record the first PWM value at which each wheel starts moving.
+Command increasing velocity setpoints from 0.5 rad/s upward in 0.5 rad/s steps. At each setpoint, wait 1 second and read the steady-state encoder velocity from the telemetry stream.
 
-Right wheel deadband test (via serial command):
 ```
-OPEN:R:10    # 10/255 PWM, forward
-OPEN:R:15
-OPEN:R:20
+VEL:R:0.5   → read measured vel after 1s
+VEL:R:1.0   → read measured vel after 1s
+VEL:R:1.5   → read measured vel after 1s
 ...
 ```
 
-Record the PWM value where the wheel first moves. This is the **motor deadband**. Values below this are wasted — the PID output should always add the deadband offset when non-zero.
+The minimum controllable velocity is the lowest setpoint at which the encoder reliably tracks (measured velocity within 20% of setpoint). Below this, static friction prevents consistent control. Record it.
 
-Expected deadband: typically 20–50 out of 255 for these motors. Record separately for each wheel.
+Expected minimum: ~1–3 rad/s for these gear motors at low Kp.
 
-**Step 1.2 — Velocity vs. PWM curve**
+**Step 1.2 — Maximum velocity**
 
-Apply PWM values from deadband to 255 in steps of 20. At each step, wait 500ms for velocity to stabilize. Record steady-state wheel velocity in rad/s.
+Command increasing setpoints from minimum up to where the measured velocity stops increasing. This is the **maximum closed-loop velocity** — encoder-confirmed, not assumed.
 
 ```
-OPEN:R:50   → record vel_R
-OPEN:R:70   → record vel_R
-OPEN:R:90   → record vel_R
-...
-OPEN:R:255  → record vel_R   ← this is max velocity
+VEL:R:5.0   → record measured vel
+VEL:R:8.0   → record measured vel
+VEL:R:12.0  → record measured vel
+VEL:R:16.0  → record measured vel
+...          → find where velocity saturates
 ```
 
-Plot PWM vs. rad/s. Expect roughly linear above the deadband.
+Record max velocity for each wheel separately. They may differ slightly.
 
 **Step 1.3 — Step response (time constant)**
 
-Apply a step from 0 → 50% PWM. Record velocity from 0 until it reaches steady state. The time to reach 63% of final value is the motor **time constant (τ)**.
+Command a step from 0 → 5 rad/s. Record encoder velocity from the telemetry stream until steady state. The time from command to 63% of final measured velocity is the system **time constant (τ)**.
 
-Expected τ: 50–200ms for these gear motors.
+```
+VEL:R:0.0   → confirm stationary
+VEL:R:5.0   → start recording
+             → note time at 63% of steady-state velocity
+```
+
+Expected τ: 100–300ms under closed-loop control with low Kp.
 
 **Pass criteria:**
-- [ ] Deadband measured for right wheel (record value: _____/255)
-- [ ] Deadband measured for left wheel (record value: _____/255)
-- [ ] Max velocity measured for right wheel (record value: _____ rad/s)
-- [ ] Max velocity measured for left wheel (record value: _____ rad/s)
-- [ ] Time constant measured (record value: _____ ms)
-- [ ] Both wheels' velocity curves plotted and saved
+- [ ] Minimum controllable velocity measured — right wheel: _____ rad/s
+- [ ] Minimum controllable velocity measured — left wheel: _____ rad/s
+- [ ] Max velocity measured — right wheel: _____ rad/s
+- [ ] Max velocity measured — left wheel: _____ rad/s
+- [ ] Time constant measured: _____ ms
+- [ ] Velocity response curves plotted and saved for both wheels
 
-**Note for Python tool:** Automate the PWM sweep, capture telemetry stream, fit a curve to the velocity data, report deadband, Kmax, and τ automatically.
+**Note for Python tool:** Command the velocity sweep automatically, capture the telemetry stream, fit the step response to a first-order model, report min velocity, max velocity, and τ. These values feed directly into Stage 2's Kp starting point calculation.
 
 ---
 
@@ -151,10 +165,10 @@ Expected τ: 50–200ms for these gear motors.
 
 **Goal:** Find a Kp that gives a fast rise to setpoint without excessive oscillation. Ki = 0, Kd = 0.
 
-**Starting point:**
+**Starting point** (derived from Stage 1 results):
 ```
-Kp = 0.5 * (PWM_MAX / vel_max)
-   = 0.5 * (255 / max_vel_rads)
+Kp = 1.0 / (τ_seconds * max_vel_rads)
+   e.g. τ=0.2s, max_vel=18 rad/s → Kp ≈ 0.28 — round up to 0.3 and increase from there
 Ki = 0
 Kd = 0
 ```
@@ -436,7 +450,7 @@ Expected: consistent behavior each cycle, no growing oscillation
 
 ## Stage 8 — Straight-Line and Rotation Test
 
-**Goal:** Verify both wheels together produce accurate straight-line motion and in-place rotation using only PID-controlled wheel velocities (no external correction yet — EKF comes later).
+**Goal:** Verify both wheels together produce accurate straight-line motion and in-place rotation under closed-loop wheel velocity control.
 
 Robot must be on the floor for this stage. Measure with a tape measure or marked floor grid.
 
@@ -446,7 +460,7 @@ Robot must be on the floor for this stage. Measure with a tape measure or marked
 
 Command both wheels to the same velocity (5 rad/s) for 3 seconds. Robot should drive approximately straight.
 
-Measure lateral drift at 1 meter of travel. Accept up to 5 cm drift at this stage (EKF will compensate later, but gross drift indicates a wheel gain mismatch).
+Measure lateral drift at 1 meter of travel. Accept up to 5 cm drift — gross drift beyond that indicates a wheel gain mismatch that needs correcting in the PID gains before moving on.
 
 **Step 8.2 — Rotation test**
 
