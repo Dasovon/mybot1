@@ -12,9 +12,25 @@
 
 ---
 
+## Software Prerequisites
+
+Install these on your **development PC** before starting. The Pi and ESP32 software is covered gate-by-gate below.
+
+| Tool | Purpose | Install |
+|---|---|---|
+| VS Code | Editor and PlatformIO host | https://code.visualstudio.com/ |
+| PlatformIO IDE | ESP32 firmware build + flash | https://platformio.org/install/ide?install=vscode |
+| Git | Version control | https://git-scm.com/ |
+
+---
+
 ## Gate 1 — Power Hat + Bench Supply
 
 **What you're adding:** RPI5 PD Power Hat P01 connected to bench power supply (or LiPo battery).
+
+**Software used:** None — multimeter only.
+
+**Hardware reference:** [`docs/hardware/rpi5_pd_power_hat.md`](../hardware/rpi5_pd_power_hat.md)
 
 **Wiring:**
 - Connect DC barrel input to supply set to 12V.
@@ -41,30 +57,134 @@
 
 **What you're adding:** Pi 5 powered from the hat's USB-C output.
 
+**Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
+
+### Software setup
+
+**Step 1 — Flash Raspberry Pi OS**
+
+Download and install Raspberry Pi Imager on your dev PC:
+https://www.raspberrypi.com/software/
+
+In the Imager:
+1. Choose device: **Raspberry Pi 5**
+2. Choose OS: **Raspberry Pi OS (64-bit)** — the full desktop or lite version
+3. Choose storage: your microSD card (≥32GB recommended)
+4. Click the gear icon (⚙) before writing and configure:
+   - Set hostname (e.g. `mybot`)
+   - Enable SSH
+   - Set username and password
+   - Configure Wi-Fi (your network SSID + password)
+5. Write the image
+
+**Step 2 — First boot and SSH**
+
+Insert the SD card into the Pi. Connect power. Wait ~60 seconds for first boot.
+
+Find the Pi's IP address (check your router, or use):
+```bash
+# On your dev PC:
+ping mybot.local       # if mDNS works on your network
+# or
+nmap -sn 192.168.1.0/24 | grep -i raspberry
+```
+
+Connect over SSH:
+```bash
+ssh ryan@mybot.local   # use the username you set in Imager
+```
+
+**Step 3 — Update the system**
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+```
+
+**Step 4 — Install ROS 2 Humble on Pi**
+
+ROS 2 Humble is required on the Pi for the micro-ROS agent and sensor drivers. Full installation guide: https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html
+
+Quick install:
+```bash
+# Locale
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+# Add ROS 2 apt repo
+sudo apt install software-properties-common curl -y
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+  -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
+  http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+  | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Install ROS 2 base (use base, not desktop — Pi doesn't need RViz2)
+sudo apt update && sudo apt install ros-humble-ros-base -y
+sudo apt install python3-rosdep python3-colcon-common-extensions -y
+
+# Source ROS 2 on every login
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# Initialize rosdep
+sudo rosdep init
+rosdep update
+```
+
+**Step 5 — Build micro-ROS agent from source (arm64)**
+
+The micro-ROS agent is not available as an apt package for arm64. Build it from source in `~/microros_ws`:
+
+```bash
+source /opt/ros/humble/setup.bash
+mkdir -p ~/microros_ws/src && cd ~/microros_ws
+
+# Clone micro-ROS setup tools
+git clone -b humble https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+
+# Install dependencies
+rosdep update
+rosdep install --from-paths src --ignore-src -y
+
+# Build setup tools
+colcon build && source install/local_setup.bash
+
+# Create and build the agent workspace
+ros2 run micro_ros_setup create_agent_ws.sh
+ros2 run micro_ros_setup build_agent.sh
+source install/local_setup.bash
+```
+
+Add to `~/.bashrc` so it loads on every login:
+```bash
+echo "source ~/microros_ws/install/local_setup.bash" >> ~/.bashrc
+```
+
 **Wiring:**
 - USB-C cable: hat USB-C output → Pi USB-C power input.
 - Nothing else connected yet.
 
 **Tests:**
-1. Power on.
-2. Pi should boot to desktop or CLI within ~30 seconds.
-3. Connect over SSH or monitor.
-4. Run:
 ```bash
 vcgencmd measure_volts core   # expect ~0.9–1.1V
 vcgencmd get_throttled        # expect 0x0 — no throttling
 ```
-5. Verify USB-A ports are live (test with a USB flash drive or phone).
+
+Verify USB-A ports are live (test with a USB flash drive or phone).
 
 **Pass criteria:**
 - [ ] Pi boots cleanly — no kernel panics, no rainbow square (undervoltage icon)
 - [ ] `get_throttled` returns `0x0`
 - [ ] SSH accessible over local network
+- [ ] ROS 2 Humble installed: `ros2 --version` returns without error
+- [ ] micro-ROS agent built: `ros2 run micro_ros_agent micro_ros_agent --help` works
 - [ ] USB-A ports functional
 
 **Common failures:**
 - Undervoltage: cable resistance too high — use a short, high-quality USB-C cable rated for 5A.
 - No boot: check SD card seated, valid OS image.
+- ROS 2 install fails: wrong Ubuntu version — Pi must be running Ubuntu 22.04 or Raspberry Pi OS Bookworm (based on Debian 12).
 
 ---
 
@@ -72,34 +192,123 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 
 **What you're adding:** ESP32-S3-DevKitC-1 on Lonely Binary expansion board, powered from Pi USB-A.
 
-**Wiring:**
-- USB-A to USB-C cable: Pi USB-A → ESP32 native USB port (not the UART port).
-- No other connections yet — no motors, no sensors.
+**Hardware reference:** [`docs/hardware/esp32_s3.md`](../hardware/esp32_s3.md)
 
-**Tests:**
-1. Power on (Pi already running).
-2. On Pi, run:
+### Software setup
+
+**Step 1 — Install PlatformIO on dev PC**
+
+1. Install VS Code: https://code.visualstudio.com/
+2. Open VS Code → Extensions → search **PlatformIO IDE** → Install
+3. Restart VS Code. The PlatformIO home screen should open.
+
+**Step 2 — Create the firmware project**
+
+In PlatformIO Home → New Project:
+- Name: `esp32_firmware`
+- Board: `Espressif ESP32-S3-DevKitC-1`
+- Framework: `Arduino`
+- Location: point to `firmware/esp32/` in this repo
+
+This creates `platformio.ini`. Add the required build flags:
+```ini
+[env:esp32-s3-devkitc-1]
+platform = espressif32
+board = esp32-s3-devkitc-1
+framework = arduino
+build_flags =
+    -DARDUINO_USB_CDC_ON_BOOT=1
+    -DARDUINO_USB_MODE=1
+monitor_speed = 115200
+upload_protocol = esptool
+```
+
+**Step 3 — Flash a blink sketch to confirm toolchain works**
+
+In `firmware/esp32/src/main.cpp`:
+```cpp
+#include <Arduino.h>
+void setup() { pinMode(38, OUTPUT); }   // GPIO 38 = onboard RGB LED
+void loop() { digitalWrite(38, HIGH); delay(500); digitalWrite(38, LOW); delay(500); }
+```
+
+In VS Code: click the PlatformIO **Upload** button (→ arrow in the bottom toolbar). If it asks for a port, select the ESP32's USB device.
+
+**Wiring:**
+- USB-A to USB-C cable: Pi USB-A → ESP32 native USB port (not the UART/debug port — check the silkscreen label).
+- No other connections yet.
+
+**Tests on Pi:**
 ```bash
 ls /dev/ttyACM*          # should show /dev/ttyACM0
 ls /dev/serial/by-id/    # should show Espressif entry
 dmesg | tail -20         # should show USB CDC ACM device attached
+
+# Add Pi user to dialout group (run once, then re-login):
+sudo usermod -a -G dialout $USER
 ```
-3. Verify the ESP32 RGB LED lights up (GPIO 38).
+
+**Monitor serial output from Pi:**
+```bash
+screen /dev/ttyACM0 115200
+# Press Ctrl+A then K to exit screen
+```
 
 **Pass criteria:**
 - [ ] `/dev/ttyACM0` appears on Pi within 5 seconds of plugging in
 - [ ] `by-id` path shows `usb-Espressif_USB_JTAG_serial_debug_unit_...`
 - [ ] No errors in `dmesg`
+- [ ] PlatformIO uploads blink sketch without error
+- [ ] ESP32 RGB LED blinks
 
 **Common failures:**
 - Device doesn't appear: wrong USB port on ESP32 (must be native USB, not UART/debug port).
-- Permissions denied: add Pi user to `dialout` group: `sudo usermod -a -G dialout $USER`.
+- Upload fails with "No serial port": check USB cable supports data (not charge-only).
+- `ARDUINO_USB_CDC_ON_BOOT` warning: build flag missing from `platformio.ini` — add it.
 
 ---
 
 ## Gate 4 — TB6612FNG Motor Driver (Logic Only, No Motors)
 
 **What you're adding:** TB6612FNG breakout, logic power only. No motor VM, no motors connected yet.
+
+**Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
+
+### Software setup
+
+**Test sketch** — paste into `firmware/esp32/src/main.cpp` and upload via PlatformIO:
+
+```cpp
+#include <Arduino.h>
+
+#define AIN1 11
+#define AIN2 12
+#define BIN1 14
+#define BIN2 15
+#define PWMA 10
+#define PWMB 13
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(AIN1, OUTPUT); pinMode(AIN2, OUTPUT);
+    pinMode(BIN1, OUTPUT); pinMode(BIN2, OUTPUT);
+    pinMode(PWMA, OUTPUT); pinMode(PWMB, OUTPUT);
+
+    // Toggle all lines so you can probe with multimeter
+    digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
+    digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
+    analogWrite(PWMA, 128);   // ~50% duty
+    analogWrite(PWMB, 128);
+    Serial.println("TB6612 logic test running");
+}
+
+void loop() {}
+```
+
+Upload with PlatformIO. Monitor via:
+```bash
+screen /dev/ttyACM0 115200
+```
 
 **Wiring:**
 - TB6612 `VCC` (logic) → ESP32 `3V3` pin
@@ -115,19 +324,21 @@ dmesg | tail -20         # should show USB CDC ACM device attached
 - TB6612 `AO1`, `AO2`, `BO1`, `BO2` — **leave unconnected** for now
 
 **Tests:**
-1. Power on.
-2. Measure TB6612 `VCC` pin → expect 3.3V.
-3. Measure TB6612 `STBY` pin → expect 3.3V (pulled high by onboard resistor).
-4. Wiggle GPIO signal wires — multimeter should follow 0/3.3V on AIN1, AIN2, BIN1, BIN2 when toggled from ESP32 (flash a simple test sketch if needed).
+1. Measure TB6612 `VCC` pin → expect 3.3V.
+2. Measure TB6612 `STBY` pin → expect 3.3V (pulled high by onboard resistor).
+3. With sketch running, probe AIN1 → expect 3.3V. Probe AIN2 → expect 0V.
+4. Probe PWMA → should read ~1.65V average (50% duty at 3.3V) on a multimeter, or toggle clearly on an oscilloscope.
 
 **Pass criteria:**
 - [ ] TB6612 VCC at 3.3V
 - [ ] STBY at 3.3V (motor driver enabled)
-- [ ] All 6 signal lines reachable with multimeter, no shorts to ground
+- [ ] AIN1 reads HIGH, AIN2 reads LOW with sketch running
+- [ ] `Serial.println` output visible on serial monitor
 
 **Common failures:**
 - STBY low (0V): Adafruit breakout pull-up missing — check board revision, or add external 10kΩ to 3V3.
 - VCC shows 5V: wrong power source — TB6612 logic is 3.3V from ESP32, not 5V.
+- `analogWrite` doesn't compile: ESP32 Arduino core uses `ledcWrite` — update sketch if needed.
 
 ---
 
@@ -135,37 +346,80 @@ dmesg | tail -20         # should show USB CDC ACM device attached
 
 **What you're adding:** Battery/supply VM to TB6612, right motor connected to AO1/AO2.
 
+**Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
+
+### Software setup
+
+**Test sketch** — upload via PlatformIO:
+
+```cpp
+#include <Arduino.h>
+#include "driver/ledc.h"
+
+#define AIN1 11
+#define AIN2 12
+#define PWMA 10
+#define PWM_FREQ   1000
+#define PWM_RES    8
+#define PWM_CH     0
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(AIN1, OUTPUT);
+    pinMode(AIN2, OUTPUT);
+    ledcSetup(PWM_CH, PWM_FREQ, PWM_RES);
+    ledcAttachPin(PWMA, PWM_CH);
+}
+
+void loop() {
+    // Forward at 50%
+    Serial.println("Forward");
+    digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
+    ledcWrite(PWM_CH, 128);
+    delay(2000);
+
+    // Stop
+    Serial.println("Stop");
+    ledcWrite(PWM_CH, 0);
+    delay(500);
+
+    // Reverse at 50%
+    Serial.println("Reverse");
+    digitalWrite(AIN1, LOW); digitalWrite(AIN2, HIGH);
+    ledcWrite(PWM_CH, 128);
+    delay(2000);
+
+    // Stop
+    ledcWrite(PWM_CH, 0);
+    delay(500);
+}
+```
+
 **Wiring:**
 - Battery `+` (or supply ~12V) → TB6612 `VM` via VIN screw terminal on power hat
 - Battery `−` → common ground rail
 - Right motor terminals → TB6612 `AO1` and `AO2`
 - Left motor — **leave disconnected** for now
 
+Measure VM on TB6612 before connecting the motor → must match supply voltage.
+
 **Tests:**
-Flash a minimal test sketch to ESP32 that:
-1. Sets AIN1 HIGH, AIN2 LOW, PWMA to 50% duty.
-2. Runs for 2 seconds, then stops.
-3. Reverses (AIN1 LOW, AIN2 HIGH) for 2 seconds, then stops.
-
-```
-Expected: right motor spins forward, pauses, spins in reverse.
-```
-
-Then verify:
-- Motor direction is consistent with "Motor A = RIGHT motor" in CLAUDE.md.
-- No excessive heat on TB6612 after test.
-- Measure VM on TB6612 before connecting motor → should match supply voltage.
+1. Upload sketch. Open serial monitor (`screen /dev/ttyACM0 115200`).
+2. Right motor should spin forward 2s, stop, reverse 2s, stop, repeat.
+3. Note which AIN1/AIN2 state produces forward vs reverse — record it.
+4. Touch TB6612 after 1 minute — should not be hot.
 
 **Pass criteria:**
-- [ ] VM at expected battery voltage
+- [ ] VM at expected battery voltage before motor connected
 - [ ] Right motor spins on command in both directions
-- [ ] Motor stops cleanly (no coasting/freewheeling when PWMA=0)
-- [ ] TB6612 cool after test
+- [ ] Motor stops cleanly when `ledcWrite(PWM_CH, 0)`
+- [ ] TB6612 cool after 1-minute run
+- [ ] Motor direction polarity recorded
 
 **Common failures:**
 - Motor doesn't spin: check VM present, check STBY still high after VM applied.
 - Motor runs but won't stop: STBY is floating — confirm pull-up is active.
-- Wrong direction polarity: note which AIN1/AIN2 state = forward for later PID sign convention.
+- Motor runs backwards from expected: swap AO1/AO2 wires at the motor connector.
 
 ---
 
@@ -173,24 +427,64 @@ Then verify:
 
 **What you're adding:** Left motor connected to TB6612 BO1/BO2.
 
+**Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
+
+### Software setup
+
+Extend the Gate 5 sketch to also drive Motor B:
+
+```cpp
+#include <Arduino.h>
+#include "driver/ledc.h"
+
+#define AIN1 11  #define AIN2 12  #define PWMA 10
+#define BIN1 14  #define BIN2 15  #define PWMB 13
+#define PWM_FREQ 1000  #define PWM_RES 8
+#define PWM_CHA 0      #define PWM_CHB 1
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(AIN1, OUTPUT); pinMode(AIN2, OUTPUT);
+    pinMode(BIN1, OUTPUT); pinMode(BIN2, OUTPUT);
+    ledcSetup(PWM_CHA, PWM_FREQ, PWM_RES); ledcAttachPin(PWMA, PWM_CHA);
+    ledcSetup(PWM_CHB, PWM_FREQ, PWM_RES); ledcAttachPin(PWMB, PWM_CHB);
+}
+
+void driveRight(int pwm, bool fwd) {
+    digitalWrite(AIN1, fwd); digitalWrite(AIN2, !fwd);
+    ledcWrite(PWM_CHA, pwm);
+}
+void driveLeft(int pwm, bool fwd) {
+    digitalWrite(BIN1, fwd); digitalWrite(BIN2, !fwd);
+    ledcWrite(PWM_CHB, pwm);
+}
+void stopAll() { ledcWrite(PWM_CHA, 0); ledcWrite(PWM_CHB, 0); }
+
+void loop() {
+    Serial.println("Both forward");
+    driveRight(128, true); driveLeft(128, true); delay(2000); stopAll(); delay(500);
+
+    Serial.println("Rotate in place");
+    driveRight(128, true); driveLeft(128, false); delay(2000); stopAll(); delay(500);
+}
+```
+
 **Wiring:**
 - Left motor terminals → TB6612 `BO1` and `BO2`
 
 **Tests:**
-Extend test sketch: repeat Gate 5 test for Motor B (PWMB GPIO 13, BIN1 GPIO 14, BIN2 GPIO 15).
-
-Then run both motors simultaneously:
-- Both forward → robot should move straight (or close to it).
-- One forward, one reverse → robot should rotate in place.
+1. Both motors forward → robot moves straight (or close to it).
+2. One forward, one reverse → rotates in place.
+3. Monitor supply voltage under dual load — should not sag below 10.5V.
 
 **Pass criteria:**
 - [ ] Left motor spins on command in both directions
-- [ ] Both motors running simultaneously: no supply sag, no TB6612 heat
-- [ ] Direction polarity noted for both motors (which signal state = forward)
+- [ ] Both motors simultaneously: no supply sag, no TB6612 heat
+- [ ] Direction polarity noted for both motors
 
 **Common failures:**
-- One motor runs backwards relative to the other: swap BO1/BO2 wires, or note the polarity and handle in firmware.
-- Supply voltage sags heavily under dual load: supply current limit too low — need ≥3A at 12V for both motors.
+- One motor runs backwards relative to the other: swap BO1/BO2 wires at motor connector.
+- Supply sags heavily: current limit too low — need ≥3A at 12V.
 
 ---
 
@@ -198,65 +492,137 @@ Then run both motors simultaneously:
 
 **What you're adding:** Right encoder wired to ESP32.
 
-**Wiring (JGA25-371 encoder wire colors):**
-- Red → motor power (already connected to TB6612/supply)
-- White → motor power (already connected)
-- Blue → encoder 5V or 3.3V (use 3.3V from ESP32 to keep GPIO-safe)
-- Black → encoder GND → common ground
+**Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
+
+### Software setup
+
+**Test sketch:**
+
+```cpp
+#include <Arduino.h>
+
+#define ENC_R_A 42
+#define ENC_R_B 39
+
+volatile long countR = 0;
+
+void IRAM_ATTR isrRightA() {
+    countR += (digitalRead(ENC_R_B) == digitalRead(ENC_R_A)) ? -1 : 1;
+}
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(ENC_R_A, INPUT_PULLUP);
+    pinMode(ENC_R_B, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(ENC_R_A), isrRightA, CHANGE);
+}
+
+void loop() {
+    Serial.print("Right encoder count: ");
+    Serial.println(countR);
+    delay(100);
+}
+```
+
+Upload via PlatformIO. Monitor on Pi:
+```bash
+screen /dev/ttyACM0 115200
+```
+
+**Wiring (JGA25-371 wire colors):**
+- Red / White → motor power (already connected)
+- Blue → ESP32 3.3V
+- Black → common ground
 - Yellow (Ch A) → ESP32 GPIO 42
 - Green (Ch B) → ESP32 GPIO 39
 
 **Tests:**
-Flash a test sketch that attaches `attachInterrupt(GPIO 42, isr, CHANGE)` and counts pulses. Manually rotate the right wheel one full output shaft revolution by hand.
-
-Expected count: **1010 pulses** (ENC_CPR from CLAUDE.md = 1010, at 2× quadrature).
-
-Also verify direction: forward rotation should increment count, reverse should decrement.
-
-```bash
-# Or monitor via Serial on Pi:
-screen /dev/ttyACM0 115200
-# Rotate wheel and watch count
-```
+1. Rotate right wheel one full revolution by hand. Count must reach **1010 ±50**.
+2. Rotate in opposite direction — count must decrement.
+3. Hold wheel stationary — count must not drift.
 
 **Pass criteria:**
-- [ ] One full wheel revolution = 1010 counts ±5%
-- [ ] Forward = positive count, reverse = negative
+- [ ] One full revolution = 1010 counts ±5%
+- [ ] Forward = positive, reverse = negative
 - [ ] No spurious counts when motor is stationary
 
 **Common failures:**
-- Count roughly half of expected: only one edge being captured — confirm `CHANGE` mode on interrupt.
-- Counts but wrong value: wrong CPR — recount by hand and update `ENC_CPR` if needed.
-- Spurious counts at rest: encoder power supply noise — add 100nF cap from encoder VCC to GND.
+- Count ~505 (half expected): only one edge captured — confirm `CHANGE` mode.
+- Count ~2020 (double): counting both A and B transitions — only interrupt on A.
+- Spurious counts at rest: add 100nF cap from encoder VCC to GND.
 
 ---
 
 ## Gate 8 — Left Encoder (with EMI caps)
 
-**What you're adding:** Left encoder wired to ESP32, with mandatory EMI decoupling caps.
+**What you're adding:** Left encoder wired to ESP32 with mandatory EMI decoupling caps.
 
-⚠️ **GPIO 40/41 are directly adjacent to PWM motor drive lines and will pick up TB6612 1 kHz PWM noise without hardware mitigation.**
+**Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
+
+⚠️ **GPIO 40/41 pick up TB6612 1 kHz PWM noise. Caps are not optional.**
+
+### Software setup
+
+Extend the Gate 7 sketch to add the left encoder and apply an EMA filter:
+
+```cpp
+#include <Arduino.h>
+
+#define ENC_R_A 42  #define ENC_R_B 39
+#define ENC_L_A 40  #define ENC_L_B 41
+#define VEL_ALPHA 0.2f
+
+volatile long countR = 0, countL = 0;
+volatile long lastCountL = 0;
+float velL_filtered = 0;
+
+void IRAM_ATTR isrRightA() {
+    countR += (digitalRead(ENC_R_B) == digitalRead(ENC_R_A)) ? -1 : 1;
+}
+void IRAM_ATTR isrLeftA() {
+    countL += (digitalRead(ENC_L_B) == digitalRead(ENC_L_A)) ? -1 : 1;
+}
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(ENC_R_A, INPUT_PULLUP); pinMode(ENC_R_B, INPUT_PULLUP);
+    pinMode(ENC_L_A, INPUT_PULLUP); pinMode(ENC_L_B, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(ENC_R_A), isrRightA, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENC_L_A), isrLeftA, CHANGE);
+}
+
+void loop() {
+    long rawDelta = countL - lastCountL;
+    lastCountL = countL;
+    velL_filtered = VEL_ALPHA * rawDelta + (1.0f - VEL_ALPHA) * velL_filtered;
+
+    Serial.print("R:"); Serial.print(countR);
+    Serial.print("  L:"); Serial.print(countL);
+    Serial.print("  L_vel_filtered:"); Serial.println(velL_filtered);
+    delay(100);
+}
+```
 
 **Wiring:**
-- Yellow (Ch A) → 100nF ceramic cap → GND at breadboard, then → ESP32 GPIO 40
-- Green (Ch B) → 100nF ceramic cap → GND at breadboard, then → ESP32 GPIO 41
-- Blue → 3.3V, Black → GND (same as right encoder)
+- Yellow (Ch A) → 100nF ceramic cap to GND on breadboard → ESP32 GPIO 40
+- Green (Ch B) → 100nF ceramic cap to GND on breadboard → ESP32 GPIO 41
+- Blue → 3.3V, Black → GND
 
-Route encoder wires away from motor power wires where possible.
+Route encoder wires away from motor power wires.
 
 **Tests:**
-Same as Gate 7 but for left wheel (GPIO 40 interrupt, GPIO 41 read in ISR).
-
-Additional test: run both motors at 50% PWM for 10 seconds while monitoring left encoder count via serial. Count should only change if wheel is physically moving. Spurious counts while stationary = EMI still present.
+1. Rotate left wheel one full revolution by hand → count = 1010 ±50.
+2. Run both motors at 50% PWM, wheels lifted off ground. Watch `countL` via serial — must not drift while wheels are stationary.
+3. `velL_filtered` should read ~0 when stationary under motor load.
 
 **Pass criteria:**
-- [ ] One full left wheel revolution = 1010 counts ±5%
+- [ ] One full left revolution = 1010 counts ±5%
 - [ ] Forward = positive, reverse = negative
 - [ ] Zero spurious counts while motors running at 50% PWM and wheel stationary
 
 **Common failures:**
-- Spurious counts under motor load: caps not close enough to GPIO — move caps to breadboard directly at GPIO pin, not at encoder connector end.
-- Still noisy after caps: try 2× 100nF in parallel (200nF effective), or add a small series resistor (100Ω) before the cap.
+- Spurious counts under motor load: move caps to breadboard as close to GPIO pin as possible.
+- Still noisy: use 2× 100nF in parallel (200nF), or add 100Ω series resistor before cap.
 
 ---
 
@@ -264,33 +630,83 @@ Additional test: run both motors at 50% PWM for 10 seconds while monitoring left
 
 **What you're adding:** BNO055 breakout on I2C bus.
 
+**Hardware reference:** [`docs/hardware/bno055_imu.md`](../hardware/bno055_imu.md)
+
+### Software setup
+
+**Step 1 — Add libraries to `platformio.ini`:**
+```ini
+lib_deps =
+    adafruit/Adafruit BNO055 @ ^1.6.3
+    adafruit/Adafruit Unified Sensor @ ^1.1.9
+```
+
+Library sources:
+- Adafruit BNO055: https://github.com/adafruit/Adafruit_BNO055
+- Adafruit Unified Sensor: https://github.com/adafruit/Adafruit_Sensor
+
+PlatformIO will download these automatically on next build.
+
+**Step 2 — Test sketch:**
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+
+Adafruit_BNO055 bno(55, 0x28, &Wire);
+
+void setup() {
+    Serial.begin(115200);
+    Wire.begin(8, 9);   // SDA=GPIO8, SCL=GPIO9
+    if (!bno.begin()) {
+        Serial.println("BNO055 not found — check wiring and address");
+        while (1);
+    }
+    bno.setExtCrystalUse(true);
+    Serial.println("BNO055 ready");
+}
+
+void loop() {
+    sensors_event_t event;
+    bno.getEvent(&event);
+
+    imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+    imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+
+    Serial.print("Gyro Z: "); Serial.print(gyro.z());
+    Serial.print("  Accel X: "); Serial.print(accel.x());
+    Serial.print("  Y: "); Serial.print(accel.y());
+    Serial.print("  Z: "); Serial.println(accel.z());
+    delay(100);
+}
+```
+
 **Wiring:**
 - BNO055 `VIN` → ESP32 3.3V
 - BNO055 `GND` → common ground
 - BNO055 `SDA` → ESP32 GPIO 8
 - BNO055 `SCL` → ESP32 GPIO 9
-- BNO055 `ADR` → GND (sets I2C address to 0x28)
+- BNO055 `ADR` → GND (I2C address = 0x28)
 
 **Tests:**
-1. On Pi, run I2C scan (if I2C is bridged):
-```bash
-sudo i2cdetect -y 1   # not reliable here since I2C is on ESP32, not Pi
-```
-2. Flash a test sketch using `Adafruit_BNO055` library:
-   - Print accelerometer, gyroscope, and euler angles over serial at 10 Hz.
-   - Tilt and rotate the board by hand — values must respond.
-   - Calibration status should improve over a minute of movement.
+1. Upload sketch. Open serial monitor.
+2. `BNO055 ready` must print — if not, init failed.
+3. Hold flat: accel Z ≈ 9.8, X and Y ≈ 0.
+4. Rotate board: Gyro Z changes. Stop: returns to ~0.
+5. Tilt 90°: accel axis shifts accordingly.
 
 **Pass criteria:**
-- [ ] BNO055 initializes without error (`bno.begin()` returns true)
-- [ ] Gyro Z reads ~0 rad/s when stationary, responds to rotation
-- [ ] Accel reads ~9.8 m/s² on the vertical axis when flat
-- [ ] No I2C errors in serial output
+- [ ] `bno.begin()` succeeds
+- [ ] Gyro Z reads ~0 rad/s stationary, responds to rotation
+- [ ] Accel reads ~9.8 m/s² on vertical axis when flat
+- [ ] No I2C errors or `not found` messages
 
 **Common failures:**
-- `bno.begin()` fails: address wrong — check ADR pin, default is 0x28.
-- Garbage data: SDA/SCL swapped — swap GPIO 8 and 9.
-- Intermittent errors: I2C pullups missing — add 4.7kΩ from SDA and SCL to 3.3V (Adafruit breakout has onboard pullups, so this is usually not needed).
+- Init fails: ADR pin floating — tie it to GND explicitly.
+- Garbage values: SDA/SCL swapped — try swapping GPIO 8 and 9.
+- Intermittent: long wire capacitance — shorten I2C wires or reduce I2C clock speed with `Wire.setClock(100000)`.
 
 ---
 
@@ -298,37 +714,77 @@ sudo i2cdetect -y 1   # not reliable here since I2C is on ESP32, not Pi
 
 **What you're adding:** INA219 breakout on the same I2C bus.
 
+**Hardware reference:** [`docs/hardware/ina219_battery_monitor.md`](../hardware/ina219_battery_monitor.md)
+
+### Software setup
+
+**Step 1 — Add library to `platformio.ini`:**
+```ini
+lib_deps =
+    adafruit/Adafruit BNO055 @ ^1.6.3
+    adafruit/Adafruit Unified Sensor @ ^1.1.9
+    adafruit/Adafruit INA219 @ ^1.2.1
+```
+
+Library source: https://github.com/adafruit/Adafruit_INA219
+
+**Step 2 — Test sketch (reads both BNO055 and INA219 simultaneously):**
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <Adafruit_INA219.h>
+
+Adafruit_BNO055 bno(55, 0x28, &Wire);
+Adafruit_INA219 ina(0x40);
+
+void setup() {
+    Serial.begin(115200);
+    Wire.begin(8, 9);
+    if (!bno.begin()) { Serial.println("BNO055 FAIL"); while(1); }
+    if (!ina.begin())  { Serial.println("INA219 FAIL"); while(1); }
+    Serial.println("Both sensors ready");
+}
+
+void loop() {
+    float busV   = ina.getBusVoltage_V();
+    float current = ina.getCurrent_mA();
+    imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+    Serial.print("Bus V: "); Serial.print(busV);
+    Serial.print("V  Current: "); Serial.print(current);
+    Serial.print("mA  Gyro Z: "); Serial.println(gyro.z());
+    delay(500);
+}
+```
+
 **Wiring:**
 - INA219 `VCC` → ESP32 3.3V
 - INA219 `GND` → common ground
 - INA219 `SDA` → ESP32 GPIO 8 (shared with BNO055)
 - INA219 `SCL` → ESP32 GPIO 9 (shared with BNO055)
-- INA219 `A0`, `A1` → GND (sets address to 0x40)
-- INA219 `VIN+` → battery positive (or supply positive)
-- INA219 `VIN-` → downstream load positive (or short to VIN+ for bench test)
+- INA219 `A0`, `A1` → GND (address = 0x40)
+- INA219 `VIN+` → battery/supply positive
+- INA219 `VIN-` → downstream load, or short to VIN+ for bench test
 
 **Tests:**
-Flash a sketch using `Adafruit_INA219` library:
-```
-Print: bus voltage, shunt voltage, current mA, power mW
-```
-With battery connected:
-- Bus voltage should read ~12V (or supply voltage).
-- Current should read roughly the load draw.
-
-With no load (VIN+ shorted to VIN-): current ≈ 0 mA.
-
-Verify BNO055 still works simultaneously — two devices on same I2C bus.
+1. Upload sketch. Both `ready` messages must appear.
+2. Bus voltage must read within 0.2V of measured supply voltage.
+3. With VIN+ shorted to VIN-: current ≈ 0 mA.
+4. BNO055 gyro still responds to movement.
 
 **Pass criteria:**
 - [ ] INA219 initializes without error
-- [ ] Bus voltage reads within 0.2V of measured supply voltage
+- [ ] Bus voltage within 0.2V of supply
 - [ ] Current reads 0 mA ±5 mA with no load
-- [ ] BNO055 still reading correctly on same bus
+- [ ] BNO055 still reading correctly on shared I2C bus
 
 **Common failures:**
-- Address conflict: if another device is at 0x40, change A0/A1 jumpers.
-- Bus hangs after adding INA219: one device holding SDA low — power cycle and check wiring.
+- INA219 FAIL: address conflict — check A0/A1 jumpers, verify 0x40 not taken.
+- Bus hangs: one device pulling SDA low — power cycle and check wiring order.
+- Wildly wrong current: shunt resistor value mismatch — Adafruit INA219 uses 0.1Ω, library defaults to this.
 
 ---
 
@@ -336,34 +792,72 @@ Verify BNO055 still works simultaneously — two devices on same I2C bus.
 
 **What you're adding:** RPLidar A1 M8 connected to Raspberry Pi.
 
-**Wiring:**
-- USB-A cable: Pi USB-A port → RPLidar USB adapter
-- LiDAR power comes from USB — no separate power needed.
+**Hardware reference:** [`docs/hardware/rplidar.md`](../hardware/rplidar.md)
 
-**Tests:**
-On Pi:
+### Software setup
+
+**Step 1 — Install rplidar ROS 2 package on Pi:**
 ```bash
-ls /dev/rplidar          # symlink should exist (set up via udev rule, or use /dev/ttyUSB0)
-sudo apt install ros-humble-rplidar-ros  # if not already installed
-ros2 run rplidar_ros rplidar_composition --ros-args \
-  -p serial_port:=/dev/rplidar -p frame_id:=laser
-ros2 topic hz /scan      # expect ~5.5 Hz
-ros2 topic echo /scan --once   # check ranges array is populated
+sudo apt install ros-humble-rplidar-ros -y
 ```
 
-Slowly wave a hand in front of the LiDAR and watch `/scan` ranges change in RViz2 or echoed output.
+**Step 2 — Set up udev rule so device always appears as `/dev/rplidar`:**
+```bash
+# Find the vendor ID first:
+lsusb   # look for Silicon Labs CP210x — vendor ID 10c4
+
+# Create udev rule:
+sudo tee /etc/udev/rules.d/99-rplidar.rules > /dev/null << 'EOF'
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", SYMLINK+="rplidar", MODE="0666"
+EOF
+
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Unplug and replug the LiDAR — `/dev/rplidar` should appear.
+
+**Step 3 — Test launch:**
+```bash
+source /opt/ros/humble/setup.bash
+ros2 run rplidar_ros rplidar_composition --ros-args \
+    -p serial_port:=/dev/rplidar \
+    -p frame_id:=laser \
+    -p angle_compensate:=true
+```
+
+In a second terminal:
+```bash
+source /opt/ros/humble/setup.bash
+ros2 topic hz /scan
+ros2 topic echo /scan --once | head -20
+```
+
+**Optional — Visualize in RViz2 (on dev PC):**
+
+Install RViz2 on dev PC:
+```bash
+sudo apt install ros-humble-desktop -y   # includes RViz2
+```
+
+Set `ROS_DOMAIN_ID` to match Pi, or use a shared network and same ROS 2 environment. Then:
+```bash
+rviz2
+# Add → By topic → /scan → LaserScan
+```
+
+**Wiring:**
+- USB-A cable: Pi USB-A port → RPLidar USB adapter
 
 **Pass criteria:**
-- [ ] `/dev/rplidar` device present
+- [ ] `/dev/rplidar` appears after udev rule
 - [ ] `/scan` publishes at ~5.5 Hz
-- [ ] `ranges` array shows plausible distances (not all 0 or inf)
-- [ ] Moving obstacle visible in scan data
+- [ ] `ranges` array populated with non-zero, non-inf values
+- [ ] Moving obstacle visible in scan
 
 **Common failures:**
-- Device not found: no udev rule — use `/dev/ttyUSB0` directly or add udev rule:
-  `SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", SYMLINK+="rplidar"`
-- Motor doesn't spin: LiDAR motor control signal issue — ensure `rplidar_ros` node is running (it controls motor enable).
-- All ranges = 0: motor spinning but laser off — firmware issue, power cycle.
+- Device not found: wrong vendor ID — check `lsusb` for your specific cable/adapter.
+- Motor doesn't spin: `rplidar_ros` node not running (it controls motor enable via DTR line).
+- All ranges = 0 or inf: motor spinning but laser off — power cycle LiDAR.
 
 ---
 
@@ -371,78 +865,163 @@ Slowly wave a hand in front of the LiDAR and watch `/scan` ranges change in RViz
 
 **What you're adding:** RealSense D435 connected to Raspberry Pi via USB 3.0.
 
-**Wiring:**
-- USB-A (3.0) cable: Pi USB 3.0 port → RealSense D435.
-- ⚠️ Must use USB 3.0 port — USB 2.0 bandwidth is insufficient for depth + color at 15 fps.
+**Hardware reference:** [`docs/hardware/realsense_d435.md`](../hardware/realsense_d435.md)
 
-**Tests:**
-On Pi:
+### Software setup
+
+**Step 1 — Install librealsense2 on Pi**
+
+Intel RealSense SDK (librealsense2) source: https://github.com/IntelRealSense/librealsense
+
+For Raspberry Pi (arm64), install from Intel's apt server:
 ```bash
-rs-enumerate-devices        # should list D435 serial number and firmware
-rs-depth                    # live depth preview (text mode) — optional
-ros2 launch realsense2_camera rs_launch.py \
-  depth_width:=640 depth_height:=480 depth_fps:=15 \
-  color_width:=640 color_height:=480 color_fps:=15
-ros2 topic hz /camera/depth/image_rect_raw   # expect ~15 Hz
-ros2 topic hz /camera/color/image_raw        # expect ~15 Hz
-ros2 topic hz /camera/depth/points           # expect ~15 Hz
+# Add Intel RealSense apt key and repo
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD \
+  || sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD
+
+sudo add-apt-repository "deb https://librealsense.intel.com/Debian/apt-repo $(lsb_release -cs) main" -u
+sudo apt install librealsense2-utils librealsense2-dev -y
 ```
 
+Verify install:
+```bash
+rs-enumerate-devices   # should list D435 serial number and firmware version
+```
+
+**Step 2 — Install realsense2_camera ROS package**
+
+ROS wrapper source: https://github.com/IntelRealSense/realsense-ros
+
+Install via apt:
+```bash
+sudo apt install ros-humble-realsense2-camera ros-humble-realsense2-description -y
+```
+
+**Step 3 — Test launch:**
+```bash
+source /opt/ros/humble/setup.bash
+ros2 launch realsense2_camera rs_launch.py \
+    depth_width:=640 depth_height:=480 depth_fps:=15 \
+    color_width:=640 color_height:=480 color_fps:=15 \
+    pointcloud.enable:=true
+```
+
+In separate terminals:
+```bash
+ros2 topic hz /camera/depth/image_rect_raw
+ros2 topic hz /camera/color/image_raw
+ros2 topic hz /camera/depth/points
+```
+
+Check USB is SuperSpeed (USB 3.0):
+```bash
+lsusb -t   # look for D435 at 5000M — if it shows 480M it's USB 2.0
+```
+
+**Wiring:**
+- USB-A (3.0) cable: Pi USB 3.0 port → RealSense D435
+- ⚠️ Must use USB 3.0 — USB 2.0 bandwidth is insufficient.
+
 **Pass criteria:**
-- [ ] `rs-enumerate-devices` lists the D435
+- [ ] `rs-enumerate-devices` lists D435
 - [ ] Depth stream at ~15 Hz
 - [ ] Color stream at ~15 Hz
-- [ ] Point cloud stream at ~15 Hz
-- [ ] No USB bandwidth errors in `dmesg`
-- [ ] RPLidar still publishing simultaneously (both running at same time)
+- [ ] Point cloud at ~15 Hz
+- [ ] `lsusb -t` shows 5000M (USB 3.0 SuperSpeed)
+- [ ] No USB errors in `dmesg`
+- [ ] RPLidar still publishing at ~5.5 Hz simultaneously
 
 **Common failures:**
-- Low FPS or dropped frames: USB 2.0 port used instead of 3.0 — check `lsusb -t` for SuperSpeed (5000M).
-- `rs-enumerate-devices` finds nothing: driver not installed — install `librealsense2` via Intel repo.
-- USB errors in dmesg: excessive USB bus load — avoid sharing root hub with other high-bandwidth devices.
+- Low FPS / dropped frames: USB 2.0 port — check port physically and `lsusb -t`.
+- `rs-enumerate-devices` empty: librealsense2 not installed, or wrong backend — try `--backend-type libuvc`.
+- USB errors in dmesg: too many high-bandwidth devices on same root hub — move to different physical port.
 
 ---
 
-## Gate 13 — Full Electronics Bench Test (All Components Together)
+## Gate 13 — Full Electronics Bench Test
 
-**What you're testing:** Everything powered simultaneously, all I2C devices, both motor channels, both encoders, LiDAR, RealSense.
+**What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
-**Tests:**
-1. Power on full system.
-2. Verify all USB devices appear:
+### Software: micro-ROS agent
+
+The micro-ROS agent was built in Gate 2. Run it on Pi:
 ```bash
-ls /dev/ttyACM0     # ESP32
-ls /dev/rplidar     # LiDAR
-lsusb | grep Intel  # RealSense
+source /opt/ros/humble/setup.bash
+source ~/microros_ws/install/local_setup.bash
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
 ```
-3. Flash full firmware to ESP32 (Phase 1 firmware when ready, or current test sketch).
-4. Run micro-ROS agent on Pi and verify all topics publish:
+
+For the full bench test, the ESP32 must be running the Phase 1 firmware from `build_plan.md`. If Phase 1 firmware isn't written yet, use the combined test sketch from Gates 4–8 and verify manually.
+
+### Full system check
+
+**Step 1 — Verify all USB devices present:**
 ```bash
-ros2 topic hz /diff_cont/odom
-ros2 topic hz /imu/imu
-ros2 topic echo /battery_state --once
-ros2 topic hz /scan
-ros2 topic hz /camera/depth/points
+ls /dev/ttyACM0        # ESP32
+ls /dev/rplidar        # LiDAR
+lsusb | grep Intel     # RealSense
 ```
-5. Send a velocity command and verify robot moves and odom updates.
-6. Cut the command stream — verify watchdog stops the motors within 500ms.
-7. Monitor supply voltage under full load (all devices + motors running).
+
+**Step 2 — Launch all sensors:**
+```bash
+# Terminal 1 — micro-ROS agent
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
+
+# Terminal 2 — RPLidar
+ros2 run rplidar_ros rplidar_composition --ros-args -p serial_port:=/dev/rplidar -p frame_id:=laser
+
+# Terminal 3 — RealSense
+ros2 launch realsense2_camera rs_launch.py depth_width:=640 depth_height:=480 \
+    depth_fps:=15 color_width:=640 color_height:=480 color_fps:=15 pointcloud.enable:=true
+```
+
+**Step 3 — Verify all topics:**
+```bash
+# Terminal 4
+source /opt/ros/humble/setup.bash
+ros2 topic hz /diff_cont/odom          # ~30 Hz
+ros2 topic hz /imu/imu                  # ~30 Hz
+ros2 topic echo /battery_state --once  # voltage/current values
+ros2 topic hz /scan                     # ~5.5 Hz
+ros2 topic hz /camera/depth/points      # ~15 Hz
+```
+
+**Step 4 — Drive test and watchdog:**
+```bash
+# Send a velocity command (robot must be on the floor or wheels lifted):
+ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
+    "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 10
+
+# Ctrl+C to stop — robot must stop within 500ms (watchdog timeout)
+```
+
+**Step 5 — 5-minute soak test:**
+Run all nodes for 5 minutes with periodic motion commands. Monitor:
+```bash
+watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20 2>&1 | tail -15"
+```
 
 **Pass criteria:**
 - [ ] All USB devices present simultaneously
-- [ ] All ROS topics publishing at expected rates
-- [ ] Robot moves on command, odom tracks motion
-- [ ] Watchdog stops motors reliably
-- [ ] Supply voltage stable (no sag below 10.5V on 12V nominal battery under load)
+- [ ] `/diff_cont/odom` at ~30 Hz
+- [ ] `/imu/imu` at ~30 Hz
+- [ ] `/battery_state` publishes with plausible voltage and current
+- [ ] `/scan` at ~5.5 Hz
+- [ ] `/camera/depth/points` at ~15 Hz
+- [ ] Robot moves on velocity command, odom updates
+- [ ] Watchdog stops motors within 500ms of command stream cut
+- [ ] Supply voltage stable (no sag below 10.5V under full load)
 - [ ] No component overheating after 5-minute run
 
-Gate 13 pass = electronics build complete. Proceed to Phase 2 of `build_plan.md`.
+**Gate 13 pass = electronics build complete. Proceed to Phase 2 of [`build_plan.md`](../architecture/build_plan.md).**
 
 ---
 
 ## BME680 — Future (Not Yet Wired)
 
-BME680 will be added in Phase 6 (see `build_plan.md`). When ready:
+BME680 will be added in Phase 6. When ready:
 - I2C addr 0x76, same SDA/SCL bus (GPIO 8/9)
+- Library: https://github.com/adafruit/Adafruit_BME680
+- Add to `platformio.ini`: `adafruit/Adafruit BME680 Library`
 - Confirm no address conflict with BNO055 (0x28) and INA219 (0x40) before wiring
-- Add a Gate 13b entry and test alongside all other components
+- Follow the same test-first approach as Gates 9–10
