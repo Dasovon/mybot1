@@ -83,7 +83,7 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 ---
 
-### Step 0.1 — Power Hat + Bench Supply
+### Step 1 — Power Hat + Bench Supply
 
 **What you're adding:** RPI5 PD Power Hat P01 connected to bench power supply (or LiPo battery).
 
@@ -112,14 +112,14 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 ---
 
-### Step 0.2 — Raspberry Pi 5
+### Step 2 — Raspberry Pi 5
 
 **What you're adding:** Pi 5 powered from the hat's USB-C output.
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
 
-**A — Flash Raspberry Pi OS**
+**2.1 — Flash Raspberry Pi OS**
 
 Download and install Raspberry Pi Imager on your dev PC:
 https://www.raspberrypi.com/software/
@@ -135,7 +135,7 @@ In the Imager:
    - Configure Wi-Fi (your network SSID + password)
 5. Write the image
 
-**B — First boot and SSH**
+**2.2 — First boot and SSH**
 
 Insert the SD card into the Pi. Connect power. Wait ~60 seconds for first boot.
 
@@ -151,13 +151,13 @@ Connect over SSH:
 ssh ryan@mybot.local
 ```
 
-**C — Update the system**
+**2.3 — Update the system**
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-**D — Install ROS 2 Humble on Pi**
+**2.4 — Install ROS 2 Humble on Pi**
 
 Install base only — the Pi does not need RViz2.
 
@@ -185,7 +185,7 @@ sudo rosdep init
 rosdep update
 ```
 
-**E — Build micro-ROS agent from source (arm64)**
+**2.5 — Build micro-ROS agent from source (arm64)**
 
 Not available as an apt package for arm64. Build from source in `~/microros_ws`:
 
@@ -231,20 +231,20 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 
 ---
 
-### Step 0.3 — ESP32-S3 (USB, no firmware yet)
+### Step 3 — ESP32-S3 (USB, no firmware yet)
 
 **What you're adding:** ESP32-S3-DevKitC-1 on Lonely Binary expansion board, powered from Pi USB-A.
 
 **Hardware reference:** [`docs/hardware/esp32_s3.md`](../hardware/esp32_s3.md)
 
 
-**A — Install PlatformIO on dev PC**
+**3.1 — Install PlatformIO on dev PC**
 
 1. Install VS Code: https://code.visualstudio.com/
 2. Open VS Code → Extensions → search **PlatformIO IDE** → Install
 3. Restart VS Code.
 
-**B — Create the firmware project**
+**3.2 — Create the firmware project**
 
 In PlatformIO Home → New Project:
 - Name: `esp32_firmware`
@@ -265,7 +265,7 @@ monitor_speed = 115200
 upload_protocol = esptool
 ```
 
-**C — Flash a blink sketch to confirm toolchain**
+**3.3 — Flash a blink sketch to confirm toolchain**
 
 In `firmware/esp32/src/main.cpp`:
 ```cpp
@@ -306,7 +306,7 @@ screen /dev/ttyACM0 115200
 
 ---
 
-### Step 0.4 — TB6612FNG Motor Driver (Logic Only, No Motors)
+### Step 4 — TB6612FNG Motor Driver (Logic Only, No Motors)
 
 **What you're adding:** TB6612FNG breakout, logic power only. No motor VM, no motors connected yet.
 
@@ -359,7 +359,7 @@ void loop() {}
 
 ---
 
-### Step 0.5 — Motor VM + Right Motor Only
+### Step 5 — Motor VM + Right Motor Only
 
 **What you're adding:** Battery/supply VM to TB6612, right motor connected to AO1/AO2.
 
@@ -423,14 +423,14 @@ void loop() {
 
 ---
 
-### Step 0.6 — Left Motor
+### Step 6 — Left Motor
 
 **What you're adding:** Left motor connected to TB6612 BO1/BO2.
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
 
-Extend the Step 0.5 sketch to drive Motor B:
+Extend the Step 5 sketch to drive Motor B:
 
 ```cpp
 #include <Arduino.h>
@@ -479,7 +479,7 @@ void loop() {
 
 ---
 
-### Step 0.7 — Right Encoder
+### Step 7 — Right Encoder
 
 **What you're adding:** Right encoder wired to ESP32.
 
@@ -531,7 +531,7 @@ void loop() {
 
 ---
 
-### Step 0.8 — Left Encoder (with EMI caps)
+### Step 8 — Left Encoder (with EMI caps)
 
 **What you're adding:** Left encoder wired to ESP32 with mandatory EMI decoupling caps.
 
@@ -540,7 +540,7 @@ void loop() {
 ⚠️ **GPIO 40/41 pick up TB6612 1 kHz PWM noise. Caps are not optional.**
 
 
-Extend the Step 0.7 sketch to add the left encoder with EMA filter:
+Extend the Step 7 sketch to add the left encoder with EMA filter:
 
 ```cpp
 #include <Arduino.h>
@@ -596,21 +596,21 @@ void loop() {
 
 ---
 
-### Step 0.9 — BNO055 IMU
+### Step 9 — BNO055 IMU
 
 **What you're adding:** BNO055 breakout on I2C bus.
 
 **Hardware reference:** [`docs/hardware/bno055_imu.md`](../hardware/bno055_imu.md)
 
 
-**A — Add libraries to `platformio.ini`:**
+**9.1 — Add libraries to `platformio.ini`:**
 ```ini
 lib_deps =
     adafruit/Adafruit BNO055 @ ^1.6.3
     adafruit/Adafruit Unified Sensor @ ^1.1.9
 ```
 
-**B — Test sketch:**
+**9.2 — Test sketch:**
 
 ```cpp
 #include <Arduino.h>
@@ -660,14 +660,14 @@ void loop() {
 
 ---
 
-### Step 0.10 — INA219 Battery Monitor
+### Step 10 — INA219 Battery Monitor
 
 **What you're adding:** INA219 breakout on the same I2C bus.
 
 **Hardware reference:** [`docs/hardware/ina219_battery_monitor.md`](../hardware/ina219_battery_monitor.md)
 
 
-**A — Add library to `platformio.ini`:**
+**10.1 — Add library to `platformio.ini`:**
 ```ini
 lib_deps =
     adafruit/Adafruit BNO055 @ ^1.6.3
@@ -675,7 +675,7 @@ lib_deps =
     adafruit/Adafruit INA219 @ ^1.2.1
 ```
 
-**B — Test sketch (reads both sensors simultaneously):**
+**10.2 — Test sketch (reads both sensors simultaneously):**
 
 ```cpp
 #include <Arduino.h>
@@ -719,19 +719,19 @@ void loop() {
 
 ---
 
-### Step 0.11 — RPLidar A1
+### Step 11 — RPLidar A1
 
 **What you're adding:** RPLidar A1 M8 connected to Raspberry Pi.
 
 **Hardware reference:** [`docs/hardware/rplidar.md`](../hardware/rplidar.md)
 
 
-**A — Install rplidar ROS 2 package on Pi:**
+**11.1 — Install rplidar ROS 2 package on Pi:**
 ```bash
 sudo apt install ros-humble-rplidar-ros -y
 ```
 
-**B — Set up udev rule:**
+**11.2 — Set up udev rule:**
 ```bash
 lsusb   # look for Silicon Labs CP210x — vendor ID 10c4
 
@@ -744,7 +744,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 Unplug and replug the LiDAR — `/dev/rplidar` should appear.
 
-**C — Test launch:**
+**11.3 — Test launch:**
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 run rplidar_ros rplidar_composition --ros-args \
@@ -779,14 +779,14 @@ rviz2
 
 ---
 
-### Step 0.12 — Intel RealSense D435
+### Step 12 — Intel RealSense D435
 
 **What you're adding:** RealSense D435 connected to Raspberry Pi via USB 3.0.
 
 **Hardware reference:** [`docs/hardware/realsense_d435.md`](../hardware/realsense_d435.md)
 
 
-**A — Install librealsense2 on Pi:**
+**12.1 — Install librealsense2 on Pi:**
 ```bash
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD \
   || sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD
@@ -800,12 +800,12 @@ Verify:
 rs-enumerate-devices   # should list D435 serial number and firmware version
 ```
 
-**B — Install realsense2_camera ROS package:**
+**12.2 — Install realsense2_camera ROS package:**
 ```bash
 sudo apt install ros-humble-realsense2-camera ros-humble-realsense2-description -y
 ```
 
-**C — Test launch:**
+**12.3 — Test launch:**
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 launch realsense2_camera rs_launch.py \
@@ -837,14 +837,14 @@ lsusb -t   # D435 must show 5000M — if 480M it's USB 2.0
 
 ---
 
-### Step 0.13 — Waveshare 2.42" OLED Display
+### Step 13 — Waveshare 2.42" OLED Display
 
 **What you're adding:** Waveshare 2.42inch OLED Module (SSD1309, 128×64) connected to Raspberry Pi via SPI0.
 
 **Hardware reference:** [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
 
 
-**A — Enable SPI on the Pi:**
+**13.1 — Enable SPI on the Pi:**
 ```bash
 sudo raspi-config
 # → Interface Options → SPI → Yes → Finish → reboot
@@ -855,7 +855,7 @@ Verify after reboot:
 ls /dev/spidev*   # must show /dev/spidev0.0
 ```
 
-**B — Install Python dependencies:**
+**13.2 — Install Python dependencies:**
 ```bash
 sudo apt update
 sudo apt install python3-pip python3-pil python3-spidev python3-smbus -y
@@ -864,13 +864,13 @@ pip3 install lgpio
 
 > Use `lgpio` — not bcm2835 or WiringPi, which do not work on Raspberry Pi 5.
 
-**C — Download Waveshare demo code:**
+**13.3 — Download Waveshare demo code:**
 ```bash
 git clone https://github.com/waveshare/2.42inch-OLED-Module.git ~/oled_demo
 cd ~/oled_demo/RaspberryPi/python/
 ```
 
-**D — Run the test script:**
+**13.4 — Run the test script:**
 ```bash
 sudo python3 OLED_2in42_test.py
 ```
@@ -896,29 +896,29 @@ The display must cycle through text, shapes, and a logo image.
 
 ---
 
-### Step 0.14 — Full Electronics Bench Test
+### Step 14 — Full Electronics Bench Test
 
 **What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
 
-The micro-ROS agent was built in Step 0.2. Run it on Pi:
+The micro-ROS agent was built in Step 2. Run it on Pi:
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/local_setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
 ```
 
-For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 0.4–0.8 and verify manually.
+For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 4–8 and verify manually.
 
 
-**A — Verify all USB devices present:**
+**14.1 — Verify all USB devices present:**
 ```bash
 ls /dev/ttyACM0        # ESP32
 ls /dev/rplidar        # LiDAR
 lsusb | grep Intel     # RealSense
 ```
 
-**B — Launch all sensors:**
+**14.2 — Launch all sensors:**
 ```bash
 # Terminal 1 — micro-ROS agent
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
@@ -931,7 +931,7 @@ ros2 launch realsense2_camera rs_launch.py depth_width:=640 depth_height:=480 \
     depth_fps:=15 color_width:=640 color_height:=480 color_fps:=15 pointcloud.enable:=true
 ```
 
-**C — Verify all topics:**
+**14.3 — Verify all topics:**
 ```bash
 ros2 topic hz /diff_cont/odom          # ~30 Hz
 ros2 topic hz /imu/imu                  # ~30 Hz
@@ -940,14 +940,14 @@ ros2 topic hz /scan                     # ~5.5 Hz
 ros2 topic hz /camera/depth/points      # ~15 Hz
 ```
 
-**D — Drive test and watchdog:**
+**14.4 — Drive test and watchdog:**
 ```bash
 ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
     "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 10
 # Ctrl+C to stop — robot must stop within 500ms (watchdog timeout)
 ```
 
-**E — 5-minute soak test:**
+**14.5 — 5-minute soak test:**
 ```bash
 watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20 2>&1 | tail -15"
 ```
@@ -964,15 +964,15 @@ watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20
 - [ ] Supply voltage stable (no sag below 10.5V under full load)
 - [ ] No component overheating after 5-minute run
 
-**Step 0.14 pass = Phase 0 complete. Proceed to Phase 1.**
+**Step 14 pass = Phase 0 complete. Proceed to Phase 1.**
 
 ### Phase 0 complete when:
 - All hardware wired per GPIO map in CLAUDE.md
-- GPIO 40/41 EMI caps confirmed working (Step 0.8)
+- GPIO 40/41 EMI caps confirmed working (Step 8)
 - Common ground verified across all components
 - Pi reachable over SSH, `/dev/ttyACM0` present, `/dev/rplidar` present
-- OLED display working on Pi SPI0 (Step 0.13)
-- All ROS topics publishing at expected rates with full system powered (Step 0.14)
+- OLED display working on Pi SPI0 (Step 13)
+- All ROS topics publishing at expected rates with full system powered (Step 14)
 
 ---
 
@@ -1002,7 +1002,7 @@ Working closed-loop motor control with encoder feedback, IMU + battery publishin
 
 ### Step-by-step
 
-**Step 1.1 — PlatformIO project**
+**Step 1 — PlatformIO project**
 Create `firmware/esp32/platformio.ini` targeting `esp32-s3-devkitc-1`. Required build flags:
 ```
 -DARDUINO_USB_CDC_ON_BOOT=1
@@ -1010,7 +1010,7 @@ Create `firmware/esp32/platformio.ini` targeting `esp32-s3-devkitc-1`. Required 
 ```
 Dependencies: `micro_ros_arduino`, `Adafruit BNO055`, `Adafruit INA219`, `Wire`.
 
-**Step 1.2 — Motor driver**
+**Step 2 — Motor driver**
 Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
 - PWMA (GPIO 10) → right motor, LEDC ch 0, 1 kHz, 8-bit
 - AIN1/AIN2 (GPIO 11/12) → right direction
@@ -1019,28 +1019,28 @@ Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
 
 Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop()`.
 
-**Step 1.3 — Encoder ISR**
+**Step 3 — Encoder ISR**
 Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.034 m`.
 
 Apply EMA filter on left encoder velocity (`VEL_ALPHA = 0.2`) to suppress GPIO 40/41 PWM noise.
 
-**Step 1.4 — PID controller**
+**Step 4 — PID controller**
 One PID instance per wheel. Input: measured wheel velocity (rad/s). Output: PWM command. Run at 100 Hz in a FreeRTOS task or `loop()`. Expose tunable Kp, Ki, Kd constants via `#define` in a header.
 
-**Step 1.5 — IMU (BNO055)**
+**Step 5 — IMU (BNO055)**
 Initialize on I2C (GPIO 8 SDA, GPIO 9 SCL, addr 0x28). Read linear acceleration and angular velocity at 30 Hz. Do not use magnetometer (unreliable on metal chassis).
 
-**Step 1.6 — Battery monitor (INA219)**
+**Step 6 — Battery monitor (INA219)**
 Initialize on same I2C bus (addr 0x40). Read bus voltage and current at 1 Hz.
 
 **The INA219 read and `/battery_state` publish must run in their own dedicated FreeRTOS task** — not inside the motor/PID loop or the micro-ROS spin loop. This is a hard requirement learned from a prior build: when battery monitoring shares execution context with motor control, running a motor test (or any blocking operation) pauses battery updates. The battery task must be able to read and publish at 1 Hz regardless of what the motor, encoder, or IMU tasks are doing.
 
 Implementation rule: create a `battery_task` pinned to a core with its own `vTaskDelay(pdMS_TO_TICKS(1000))` cadence. Never call the INA219 read from `loop()` or from within the PID task.
 
-**Step 1.7 — Safety watchdog**
+**Step 7 — Safety watchdog**
 If no `/diff_cont/cmd_vel_unstamped` message is received within 500 ms, call `motors_stop()`. Watchdog must run independently of micro-ROS connection state — use a hardware timer or FreeRTOS timer, not a ROS callback.
 
-**Step 1.8 — micro-ROS node**
+**Step 8 — micro-ROS node**
 Transport: USB serial (`Serial`, HWCDC). Publishers:
 - `/diff_cont/odom` — `nav_msgs/Odometry` at 30 Hz
 - `/imu/imu` — `sensor_msgs/Imu` at 30 Hz
@@ -1096,10 +1096,10 @@ A complete URDF describing the robot's physical geometry and sensor placement. T
 
 ### Step-by-step
 
-**Step 2.1 — Chassis and wheels**
+**Step 1 — Chassis and wheels**
 Define `base_link` as the robot body. Add `left_wheel` and `right_wheel` as continuous joints. Use measured values from CLAUDE.md: `wheel_radius = 0.034 m`, `wheel_separation = 0.179 m`.
 
-**Step 2.2 — Sensor frames**
+**Step 2 — Sensor frames**
 Define static frames relative to `base_link`:
 - `laser` — RPLidar A1 mount position
 - `imu_link` — BNO055 position (on ESP32 board)
@@ -1108,7 +1108,7 @@ Define static frames relative to `base_link`:
 
 Frame positions must match physical sensor placement on the robot. Measure and record them.
 
-**Step 2.3 — Diff drive plugin**
+**Step 3 — Diff drive plugin**
 Add `libgazebo_ros_diff_drive` plugin (or `ros2_control` diff drive controller) configured for:
 - Left joint: `left_wheel`
 - Right joint: `right_wheel`
@@ -1117,7 +1117,7 @@ Add `libgazebo_ros_diff_drive` plugin (or `ros2_control` diff drive controller) 
 - Command topic: `/diff_cont/cmd_vel_unstamped`
 - Odometry topic: `/diff_cont/odom`
 
-**Step 2.4 — Launch file**
+**Step 4 — Launch file**
 `description.launch.py` must launch `robot_state_publisher` with the xacro output and `joint_state_publisher`.
 
 ### Validation gate — Phase 2
@@ -1151,10 +1151,10 @@ All three sensor streams (LiDAR, RealSense, IMU/odom from ESP32) active and fuse
 
 ### Step-by-step
 
-**Step 3.1 — micro-ROS agent bridge**
+**Step 1 — micro-ROS agent bridge**
 `bridge.launch.py` must start `micro_ros_agent serial --dev /dev/ttyACM0`. Use the stable by-id path from CLAUDE.md as a fallback. The node should wait for the device to appear before launching.
 
-**Step 3.2 — LiDAR driver**
+**Step 2 — LiDAR driver**
 Launch `rplidar_ros` with device `/dev/rplidar`. Frame ID must be `laser`. Expected rate: ~5.5 Hz on `/scan`.
 
 ```bash
@@ -1172,7 +1172,7 @@ ros2 topic echo /scan --once | head -10   # ranges must not be all-zero or all-i
 ```
 Do not proceed to Step 3.3 until these pass.
 
-**Step 3.3 — RealSense driver**
+**Step 3 — RealSense driver**
 Launch `realsense2_camera` with:
 - Resolution: 640×480
 - Depth FPS: 15
@@ -1180,7 +1180,7 @@ Launch `realsense2_camera` with:
 - Backend: RSUSB
 - Frame prefix: `camera`
 
-**Step 3.4 — EKF configuration**
+**Step 4 — EKF configuration**
 `ekf.yaml` fuses:
 - `/diff_cont/odom` — x, y, yaw, vx, vyaw
 - `/imu/imu` — angular velocity z, linear acceleration x/y
@@ -1218,7 +1218,7 @@ Build and save a consistent 2D map of a real environment using `slam_toolbox` wi
 
 ### Step-by-step
 
-**Step 4.1 — slam_toolbox config**
+**Step 1 — slam_toolbox config**
 Key params in `slam_toolbox.yaml`:
 - `odom_frame: odom`
 - `map_frame: map`
@@ -1227,10 +1227,10 @@ Key params in `slam_toolbox.yaml`:
 - `mode: mapping`
 - Tune `resolution`, `max_laser_range`, and loop closure params for indoor use.
 
-**Step 4.2 — Mapping launch**
+**Step 2 — Mapping launch**
 `slam.launch.py` launches `async_slam_toolbox_node` with the config. It should also bring up `description.launch.py` and `ekf.launch.py` as dependencies (or use `robot_bringup`).
 
-**Step 4.3 — Map save / load**
+**Step 3 — Map save / load**
 Use `slam_toolbox` save map service to persist maps to `src/robot_navigation/maps/`. Localization launch file loads a saved map and runs in localization-only mode.
 
 ### Validation gate — Phase 4
@@ -1263,7 +1263,7 @@ The robot navigates autonomously to a goal pose on a known map, avoiding static 
 
 ### Step-by-step
 
-**Step 5.1 — Nav2 params**
+**Step 1 — Nav2 params**
 Configure `nav2_params.yaml` with:
 - Controller: `DWBLocalPlanner` or `RPP` (regulated pure pursuit)
 - Costmap layers: `static_layer` (SLAM map) → `obstacle_layer` (LiDAR `/scan`) → `voxel_layer` (RealSense, placeholder for Phase 6)
@@ -1271,13 +1271,13 @@ Configure `nav2_params.yaml` with:
 - Controller frequency: 20 Hz
 - Command topic: `/diff_cont/cmd_vel_unstamped`
 
-**Step 5.2 — Navigation launch**
+**Step 2 — Navigation launch**
 `navigation.launch.py` launches:
 - `nav2_bringup` with `nav2_params.yaml`
 - Map server with saved map from Phase 4
 - AMCL for localization (or slam_toolbox localization mode)
 
-**Step 5.3 — Top-level bringup**
+**Step 3 — Top-level bringup**
 `bringup.launch.py` includes:
 1. `description.launch.py`
 2. `bridge.launch.py` (micro-ROS)
@@ -1319,15 +1319,15 @@ BME680 environmental data streaming, RealSense depth integrated into Nav2 as a v
 
 ### Step-by-step
 
-**Step 6.1 — BME680 firmware**
+**Step 1 — BME680 firmware**
 Wire BME680 to I2C bus (addr 0x76). Read temperature, humidity, pressure, gas resistance. Publish as custom `robot_msgs/EnvData` or `sensor_msgs/Temperature` + `sensor_msgs/RelativeHumidity` at 1 Hz. Add to micro-ROS node.
 
 Library: https://github.com/adafruit/Adafruit_BME680 — add `adafruit/Adafruit BME680 Library` to `platformio.ini`. Confirm no address conflict with BNO055 (0x28) and INA219 (0x40) before wiring.
 
-**Step 6.2 — RealSense voxel layer**
+**Step 2 — RealSense voxel layer**
 In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. Subscribe to `/camera/depth/points`. Tune height range to detect obstacles between 0.05 m and 1.5 m above floor.
 
-**Step 6.3 — OLED status display**
+**Step 3 — OLED status display**
 Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md` and `docs/hardware/raspberry_pi_5.md`. Enable SPI via `raspi-config`. Create `scripts/oled_status.py` that reads `/battery_state` and topic rates, then renders a 128×64 status frame using Pillow and pushes it over SPI at ~1 Hz.
 
 Hardware reference: [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
@@ -1357,10 +1357,10 @@ YOLO running on dev PC GPU classifies objects detected in the RealSense color st
 
 ### Step-by-step
 
-**Step 7.1 — YOLO node**
+**Step 1 — YOLO node**
 Subscribe to `/camera/color/image_raw`. Run YOLOv8 inference. Publish detections as `vision_msgs/Detection2DArray` on `/detections`. Target: ≥10 FPS on dev PC GPU.
 
-**Step 7.2 — Semantic costmap layer**
+**Step 2 — Semantic costmap layer**
 Use `nav2_costmap_2d` custom layer or a plugin to inflate costs around detected obstacles of specific classes (e.g. `person` → high cost zone).
 
 ### Validation gate — Phase 7
