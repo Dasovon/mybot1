@@ -31,11 +31,11 @@ Update the table above as each phase completes.
 
 ## Phase 0 — Hardware & Environment
 
-Add and verify one component at a time. Do not proceed to the next gate until the current gate fully passes. This prevents chasing faults across multiple unknowns.
+Add and verify one component at a time. Do not proceed to the next step until the current step fully passes. This prevents chasing faults across multiple unknowns.
 
 **Safety rules:**
 - Always power off before adding or changing wiring.
-- Verify common ground continuity before first power-on at each gate.
+- Verify common ground continuity before first power-on at each step.
 - Never connect motor VM (battery voltage) until all logic wiring is confirmed correct.
 - Keep a multimeter on hand. Check voltages before connecting sensitive components.
 - If anything gets hot unexpectedly: power off immediately.
@@ -44,7 +44,7 @@ Add and verify one component at a time. Do not proceed to the next gate until th
 
 ### Software Prerequisites
 
-Install these on your **development PC** before starting. Pi and ESP32 software is covered gate-by-gate below.
+Install these on your **development PC** before starting. Pi and ESP32 software is covered step-by-step below.
 
 | Tool | Purpose | Install |
 |---|---|---|
@@ -56,7 +56,7 @@ Install these on your **development PC** before starting. Pi and ESP32 software 
 
 ### Power & Ground Wiring Principles
 
-These principles apply at every gate. Read them once before starting.
+These principles apply at every step. Read them once before starting.
 
 #### Common ground — non-negotiable
 Battery negative, power hat GND, Pi GND, ESP32 GND, TB6612 GND, and every sensor GND share one ground bus. Run each component's ground wire directly to that bus — never daisy-chain grounds through another component.
@@ -79,11 +79,11 @@ Do not route motor power and logic power through the same wire or terminal.
 - Keep I2C wires under 30 cm — long wires add capacitance and cause reliability issues at 400 kHz.
 
 #### Measure before connecting
-At each gate: power on and measure voltage at the new component's power pin before making any signal connections. Correct voltage → proceed. Wrong voltage → stop and trace back.
+At each step: power on and measure voltage at the new component's power pin before making any signal connections. Correct voltage → proceed. Wrong voltage → stop and trace back.
 
 ---
 
-### Gate 1 — Power Hat + Bench Supply
+### Step 0.1 — Power Hat + Bench Supply
 
 **What you're adding:** RPI5 PD Power Hat P01 connected to bench power supply (or LiPo battery).
 
@@ -112,7 +112,7 @@ At each gate: power on and measure voltage at the new component's power pin befo
 
 ---
 
-### Gate 2 — Raspberry Pi 5
+### Step 0.2 — Raspberry Pi 5
 
 **What you're adding:** Pi 5 powered from the hat's USB-C output.
 
@@ -232,7 +232,7 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 
 ---
 
-### Gate 3 — ESP32-S3 (USB, no firmware yet)
+### Step 0.3 — ESP32-S3 (USB, no firmware yet)
 
 **What you're adding:** ESP32-S3-DevKitC-1 on Lonely Binary expansion board, powered from Pi USB-A.
 
@@ -308,7 +308,7 @@ screen /dev/ttyACM0 115200
 
 ---
 
-### Gate 4 — TB6612FNG Motor Driver (Logic Only, No Motors)
+### Step 0.4 — TB6612FNG Motor Driver (Logic Only, No Motors)
 
 **What you're adding:** TB6612FNG breakout, logic power only. No motor VM, no motors connected yet.
 
@@ -362,7 +362,7 @@ void loop() {}
 
 ---
 
-### Gate 5 — Motor VM + Right Motor Only
+### Step 0.5 — Motor VM + Right Motor Only
 
 **What you're adding:** Battery/supply VM to TB6612, right motor connected to AO1/AO2.
 
@@ -427,7 +427,7 @@ void loop() {
 
 ---
 
-### Gate 6 — Left Motor
+### Step 0.6 — Left Motor
 
 **What you're adding:** Left motor connected to TB6612 BO1/BO2.
 
@@ -435,7 +435,7 @@ void loop() {
 
 #### Software setup
 
-Extend the Gate 5 sketch to drive Motor B:
+Extend the Step 0.5 sketch to drive Motor B:
 
 ```cpp
 #include <Arduino.h>
@@ -484,7 +484,7 @@ void loop() {
 
 ---
 
-### Gate 7 — Right Encoder
+### Step 0.7 — Right Encoder
 
 **What you're adding:** Right encoder wired to ESP32.
 
@@ -537,7 +537,7 @@ void loop() {
 
 ---
 
-### Gate 8 — Left Encoder (with EMI caps)
+### Step 0.8 — Left Encoder (with EMI caps)
 
 **What you're adding:** Left encoder wired to ESP32 with mandatory EMI decoupling caps.
 
@@ -547,7 +547,7 @@ void loop() {
 
 #### Software setup
 
-Extend the Gate 7 sketch to add the left encoder with EMA filter:
+Extend the Step 0.7 sketch to add the left encoder with EMA filter:
 
 ```cpp
 #include <Arduino.h>
@@ -603,7 +603,7 @@ void loop() {
 
 ---
 
-### Gate 9 — BNO055 IMU
+### Step 0.9 — BNO055 IMU
 
 **What you're adding:** BNO055 breakout on I2C bus.
 
@@ -668,7 +668,7 @@ void loop() {
 
 ---
 
-### Gate 10 — INA219 Battery Monitor
+### Step 0.10 — INA219 Battery Monitor
 
 **What you're adding:** INA219 breakout on the same I2C bus.
 
@@ -728,7 +728,7 @@ void loop() {
 
 ---
 
-### Gate 11 — RPLidar A1
+### Step 0.11 — RPLidar A1
 
 **What you're adding:** RPLidar A1 M8 connected to Raspberry Pi.
 
@@ -789,7 +789,7 @@ rviz2
 
 ---
 
-### Gate 12 — Intel RealSense D435
+### Step 0.12 — Intel RealSense D435
 
 **What you're adding:** RealSense D435 connected to Raspberry Pi via USB 3.0.
 
@@ -848,7 +848,7 @@ lsusb -t   # D435 must show 5000M — if 480M it's USB 2.0
 
 ---
 
-### Gate 13 — Waveshare 2.42" OLED Display
+### Step 0.13 — Waveshare 2.42" OLED Display
 
 **What you're adding:** Waveshare 2.42inch OLED Module (SSD1309, 128×64) connected to Raspberry Pi via SPI0.
 
@@ -908,20 +908,20 @@ The display must cycle through text, shapes, and a logo image.
 
 ---
 
-### Gate 14 — Full Electronics Bench Test
+### Step 0.14 — Full Electronics Bench Test
 
 **What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
 #### Software: micro-ROS agent
 
-The micro-ROS agent was built in Gate 2. Run it on Pi:
+The micro-ROS agent was built in Step 0.2. Run it on Pi:
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/local_setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
 ```
 
-For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Gates 4–8 and verify manually.
+For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 0.4–0.8 and verify manually.
 
 #### Full system check
 
@@ -978,15 +978,15 @@ watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20
 - [ ] Supply voltage stable (no sag below 10.5V under full load)
 - [ ] No component overheating after 5-minute run
 
-**Gate 14 pass = Phase 0 complete. Proceed to Phase 1.**
+**Step 0.14 pass = Phase 0 complete. Proceed to Phase 1.**
 
 ### Phase 0 complete when:
 - All hardware wired per GPIO map in CLAUDE.md
-- GPIO 40/41 EMI caps confirmed working (Gate 8)
+- GPIO 40/41 EMI caps confirmed working (Step 0.8)
 - Common ground verified across all components
 - Pi reachable over SSH, `/dev/ttyACM0` present, `/dev/rplidar` present
-- OLED display working on Pi SPI0 (Gate 13)
-- All ROS topics publishing at expected rates with full system powered (Gate 14)
+- OLED display working on Pi SPI0 (Step 0.13)
+- All ROS topics publishing at expected rates with full system powered (Step 0.14)
 
 ---
 
