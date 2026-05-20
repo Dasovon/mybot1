@@ -10,10 +10,11 @@ The TB6612FNG drives both DC motors using PWM signals from the ESP32-S3. It hand
 
 | Property | Value |
 |---|---|
-| Motor supply voltage (VM) | 2.5V – 13.5V |
+| Motor supply voltage (VM) | 4.5V – 13.5V (DC motors); chip absolute min 2.5V |
 | Logic supply voltage (VCC) | 2.7V – 5.5V |
 | Output current (continuous) | 1.2A per channel |
-| Output current (peak) | 3.2A per channel |
+| Output current (peak) | 3A per channel (~20 ms) |
+| Kickback protection | Built-in kickback diodes on all motor outputs |
 | PWM frequency | Up to 100 kHz |
 | Channels | 2 (A and B) |
 | Standby pin | Active LOW — must be pulled HIGH to enable |

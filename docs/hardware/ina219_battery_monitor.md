@@ -79,6 +79,16 @@ The `esp32_serial_bridge` node publishes this as `sensor_msgs/BatteryState` on `
 
 ---
 
+## Inductive Kickback Warning
+
+> ⚠️ **From the INA219 datasheet:** When switching inductive loads, instantaneous voltage levels may greatly exceed steady-state levels due to inductive kickback. Chip damage can occur without protection.
+>
+> In this build, the INA219 monitors the battery/supply rail. The TB6612 motor driver is also on this rail. The **TB6612 has built-in kickback diodes** on its motor outputs, which suppress most kickback. However, rapid direction changes or PWM at high duty cycle can still cause transient voltage spikes on the supply rail.
+>
+> Mitigation: place a 100 µF electrolytic + 100 nF ceramic capacitor in parallel across the INA219 VIN+/VIN− input (on the battery side) to absorb transients.
+
+---
+
 ## Common Issues
 
 | Symptom | Likely Cause |

@@ -36,6 +36,20 @@ GPIO assignments: GPIO 40/41 = Left A/B | GPIO 42/39 = Right A/B. See `docs/hard
 
 > ⚠️ GPIO 40/41 pick up 1 kHz PWM noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` in firmware. Hardware fix: 100 nF ceramic caps on GPIO 40 and 41 to GND, placed close to the ESP32 pins.
 
+## Motor Performance (25SG-370CA-45-EN, 12V 4W)
+
+From manufacturer datasheet:
+
+| Condition | Speed | Current | Torque |
+|---|---|---|---|
+| No load | 190 rpm | < 150 mA | — |
+| Rated | 100 rpm | < 750 mA | 5 kg·cm |
+| Stall | 0 rpm | — | 9 kg·cm |
+
+Max continuous current per motor: 750 mA. Two motors = 1.5A continuous from battery. Size battery and INA219 accordingly.
+
+---
+
 ## Key Constants
 
 | Parameter | Value | Source |

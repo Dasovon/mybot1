@@ -68,13 +68,13 @@ Calibration status reported as 0–3 (3 = fully calibrated). Store calibration o
 
 ## Telemetry Output
 
-The ESP32 publishes IMU data at 50 Hz:
+The ESP32 publishes IMU data at 30 Hz:
 
 ```
 IMU <roll> <pitch> <yaw>
 ```
 
-The `esp32_serial_bridge` node converts this to `sensor_msgs/Imu` on the `/imu` topic.
+The `esp32_serial_bridge` node converts this to `sensor_msgs/Imu` on the `/imu/imu` topic.
 
 ---
 
@@ -85,7 +85,7 @@ The `/imu` topic feeds `robot_localization` (EKF node) alongside `/odom` from en
 Key parameters in `ekf.yaml`:
 
 ```yaml
-imu0: /imu
+imu0: /imu/imu
 imu0_config: [false, false, false,
               true,  true,  true,
               false, false, false,
@@ -97,11 +97,24 @@ imu0_relative: false
 
 ---
 
+## ESP32-S3 I2C Compatibility Warning
+
+> ⚠️ **The BNO055 violates the I2C protocol in some circumstances and does not work reliably with all ESP32/ESP32-S3 firmware versions.**
+>
+> The underlying issue is in the ESP-IDF I2C driver. ESP-IDF **5.3.2 and later** handle the BNO055 quirks correctly. Older versions (ESP-IDF 4.x, used by arduino-esp32 2.x) are unreliable.
+>
+> **Required:** PlatformIO `platform = espressif32` version **6.x or later** (bundles ESP-IDF 5.x). If I2C hangs or returns garbage on startup, check your arduino-esp32 platform version first.
+>
+> Symptoms of a version mismatch: I2C timeouts on boot, sensor reads returning 0xFF, or the sensor appearing to initialize but returning junk orientation data.
+
+---
+
 ## Common Issues
 
 | Symptom | Likely Cause |
 |---|---|
 | Heading drift | Magnetometer not calibrated; motor magnetic interference |
 | Incorrect orientation | Wrong axis mapping in URDF or node config |
+| I2C errors / zeros on boot | ESP-IDF too old — upgrade arduino-esp32 platform to 6.x (IDF 5.x) |
 | I2C errors | Missing pull-ups or address conflict |
 | Stale data | I2C bus running too slow; check bus speed (400 kHz recommended) |
