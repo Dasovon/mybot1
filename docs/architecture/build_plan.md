@@ -118,9 +118,8 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
-#### Software setup
 
-**Step 1 — Flash Raspberry Pi OS**
+**A — Flash Raspberry Pi OS**
 
 Download and install Raspberry Pi Imager on your dev PC:
 https://www.raspberrypi.com/software/
@@ -136,7 +135,7 @@ In the Imager:
    - Configure Wi-Fi (your network SSID + password)
 5. Write the image
 
-**Step 2 — First boot and SSH**
+**B — First boot and SSH**
 
 Insert the SD card into the Pi. Connect power. Wait ~60 seconds for first boot.
 
@@ -152,13 +151,13 @@ Connect over SSH:
 ssh ryan@mybot.local
 ```
 
-**Step 3 — Update the system**
+**C — Update the system**
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-**Step 4 — Install ROS 2 Humble on Pi**
+**D — Install ROS 2 Humble on Pi**
 
 Install base only — the Pi does not need RViz2.
 
@@ -186,7 +185,7 @@ sudo rosdep init
 rosdep update
 ```
 
-**Step 5 — Build micro-ROS agent from source (arm64)**
+**E — Build micro-ROS agent from source (arm64)**
 
 Not available as an apt package for arm64. Build from source in `~/microros_ws`:
 
@@ -238,15 +237,14 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 
 **Hardware reference:** [`docs/hardware/esp32_s3.md`](../hardware/esp32_s3.md)
 
-#### Software setup
 
-**Step 1 — Install PlatformIO on dev PC**
+**A — Install PlatformIO on dev PC**
 
 1. Install VS Code: https://code.visualstudio.com/
 2. Open VS Code → Extensions → search **PlatformIO IDE** → Install
 3. Restart VS Code.
 
-**Step 2 — Create the firmware project**
+**B — Create the firmware project**
 
 In PlatformIO Home → New Project:
 - Name: `esp32_firmware`
@@ -267,7 +265,7 @@ monitor_speed = 115200
 upload_protocol = esptool
 ```
 
-**Step 3 — Flash a blink sketch to confirm toolchain**
+**C — Flash a blink sketch to confirm toolchain**
 
 In `firmware/esp32/src/main.cpp`:
 ```cpp
@@ -314,7 +312,6 @@ screen /dev/ttyACM0 115200
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
-#### Software setup
 
 **Test sketch** — paste into `firmware/esp32/src/main.cpp` and upload:
 
@@ -368,7 +365,6 @@ void loop() {}
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
-#### Software setup
 
 **Test sketch:**
 
@@ -433,7 +429,6 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
-#### Software setup
 
 Extend the Step 0.5 sketch to drive Motor B:
 
@@ -490,7 +485,6 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
 
-#### Software setup
 
 **Test sketch:**
 
@@ -545,7 +539,6 @@ void loop() {
 
 ⚠️ **GPIO 40/41 pick up TB6612 1 kHz PWM noise. Caps are not optional.**
 
-#### Software setup
 
 Extend the Step 0.7 sketch to add the left encoder with EMA filter:
 
@@ -609,16 +602,15 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/bno055_imu.md`](../hardware/bno055_imu.md)
 
-#### Software setup
 
-**Step 1 — Add libraries to `platformio.ini`:**
+**A — Add libraries to `platformio.ini`:**
 ```ini
 lib_deps =
     adafruit/Adafruit BNO055 @ ^1.6.3
     adafruit/Adafruit Unified Sensor @ ^1.1.9
 ```
 
-**Step 2 — Test sketch:**
+**B — Test sketch:**
 
 ```cpp
 #include <Arduino.h>
@@ -674,9 +666,8 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/ina219_battery_monitor.md`](../hardware/ina219_battery_monitor.md)
 
-#### Software setup
 
-**Step 1 — Add library to `platformio.ini`:**
+**A — Add library to `platformio.ini`:**
 ```ini
 lib_deps =
     adafruit/Adafruit BNO055 @ ^1.6.3
@@ -684,7 +675,7 @@ lib_deps =
     adafruit/Adafruit INA219 @ ^1.2.1
 ```
 
-**Step 2 — Test sketch (reads both sensors simultaneously):**
+**B — Test sketch (reads both sensors simultaneously):**
 
 ```cpp
 #include <Arduino.h>
@@ -734,14 +725,13 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/rplidar.md`](../hardware/rplidar.md)
 
-#### Software setup
 
-**Step 1 — Install rplidar ROS 2 package on Pi:**
+**A — Install rplidar ROS 2 package on Pi:**
 ```bash
 sudo apt install ros-humble-rplidar-ros -y
 ```
 
-**Step 2 — Set up udev rule:**
+**B — Set up udev rule:**
 ```bash
 lsusb   # look for Silicon Labs CP210x — vendor ID 10c4
 
@@ -754,7 +744,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 Unplug and replug the LiDAR — `/dev/rplidar` should appear.
 
-**Step 3 — Test launch:**
+**C — Test launch:**
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 run rplidar_ros rplidar_composition --ros-args \
@@ -795,9 +785,8 @@ rviz2
 
 **Hardware reference:** [`docs/hardware/realsense_d435.md`](../hardware/realsense_d435.md)
 
-#### Software setup
 
-**Step 1 — Install librealsense2 on Pi:**
+**A — Install librealsense2 on Pi:**
 ```bash
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD \
   || sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD
@@ -811,12 +800,12 @@ Verify:
 rs-enumerate-devices   # should list D435 serial number and firmware version
 ```
 
-**Step 2 — Install realsense2_camera ROS package:**
+**B — Install realsense2_camera ROS package:**
 ```bash
 sudo apt install ros-humble-realsense2-camera ros-humble-realsense2-description -y
 ```
 
-**Step 3 — Test launch:**
+**C — Test launch:**
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 launch realsense2_camera rs_launch.py \
@@ -854,9 +843,8 @@ lsusb -t   # D435 must show 5000M — if 480M it's USB 2.0
 
 **Hardware reference:** [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
 
-#### Software setup
 
-**Step 1 — Enable SPI on the Pi:**
+**A — Enable SPI on the Pi:**
 ```bash
 sudo raspi-config
 # → Interface Options → SPI → Yes → Finish → reboot
@@ -867,7 +855,7 @@ Verify after reboot:
 ls /dev/spidev*   # must show /dev/spidev0.0
 ```
 
-**Step 2 — Install Python dependencies:**
+**B — Install Python dependencies:**
 ```bash
 sudo apt update
 sudo apt install python3-pip python3-pil python3-spidev python3-smbus -y
@@ -876,13 +864,13 @@ pip3 install lgpio
 
 > Use `lgpio` — not bcm2835 or WiringPi, which do not work on Raspberry Pi 5.
 
-**Step 3 — Download Waveshare demo code:**
+**C — Download Waveshare demo code:**
 ```bash
 git clone https://github.com/waveshare/2.42inch-OLED-Module.git ~/oled_demo
 cd ~/oled_demo/RaspberryPi/python/
 ```
 
-**Step 4 — Run the test script:**
+**D — Run the test script:**
 ```bash
 sudo python3 OLED_2in42_test.py
 ```
@@ -912,7 +900,6 @@ The display must cycle through text, shapes, and a logo image.
 
 **What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
-#### Software: micro-ROS agent
 
 The micro-ROS agent was built in Step 0.2. Run it on Pi:
 ```bash
@@ -923,16 +910,15 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
 
 For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 0.4–0.8 and verify manually.
 
-#### Full system check
 
-**Step 1 — Verify all USB devices present:**
+**A — Verify all USB devices present:**
 ```bash
 ls /dev/ttyACM0        # ESP32
 ls /dev/rplidar        # LiDAR
 lsusb | grep Intel     # RealSense
 ```
 
-**Step 2 — Launch all sensors:**
+**B — Launch all sensors:**
 ```bash
 # Terminal 1 — micro-ROS agent
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
@@ -945,7 +931,7 @@ ros2 launch realsense2_camera rs_launch.py depth_width:=640 depth_height:=480 \
     depth_fps:=15 color_width:=640 color_height:=480 color_fps:=15 pointcloud.enable:=true
 ```
 
-**Step 3 — Verify all topics:**
+**C — Verify all topics:**
 ```bash
 ros2 topic hz /diff_cont/odom          # ~30 Hz
 ros2 topic hz /imu/imu                  # ~30 Hz
@@ -954,14 +940,14 @@ ros2 topic hz /scan                     # ~5.5 Hz
 ros2 topic hz /camera/depth/points      # ~15 Hz
 ```
 
-**Step 4 — Drive test and watchdog:**
+**D — Drive test and watchdog:**
 ```bash
 ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
     "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 10
 # Ctrl+C to stop — robot must stop within 500ms (watchdog timeout)
 ```
 
-**Step 5 — 5-minute soak test:**
+**E — 5-minute soak test:**
 ```bash
 watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20 2>&1 | tail -15"
 ```
