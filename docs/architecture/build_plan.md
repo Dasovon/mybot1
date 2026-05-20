@@ -118,7 +118,6 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
-
 **2.1 — Flash Raspberry Pi OS**
 
 Download and install Raspberry Pi Imager on your dev PC:
@@ -237,7 +236,6 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 
 **Hardware reference:** [`docs/hardware/esp32_s3.md`](../hardware/esp32_s3.md)
 
-
 **3.1 — Install PlatformIO on dev PC**
 
 1. Install VS Code: https://code.visualstudio.com/
@@ -312,7 +310,6 @@ screen /dev/ttyACM0 115200
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
-
 **Test sketch** — paste into `firmware/esp32/src/main.cpp` and upload:
 
 ```cpp
@@ -332,8 +329,10 @@ void setup() {
     pinMode(PWMA, OUTPUT); pinMode(PWMB, OUTPUT);
     digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
     digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
-    analogWrite(PWMA, 128);
-    analogWrite(PWMB, 128);
+    ledcSetup(0, 1000, 8); ledcAttachPin(PWMA, 0);
+    ledcSetup(1, 1000, 8); ledcAttachPin(PWMB, 1);
+    ledcWrite(0, 128);
+    ledcWrite(1, 128);
     Serial.println("TB6612 logic test running");
 }
 
@@ -355,7 +354,7 @@ void loop() {}
 **Common failures:**
 - STBY low (0V): Adafruit breakout pull-up missing — add external 10kΩ to 3V3.
 - VCC shows 5V: wrong power source — TB6612 logic is 3.3V from ESP32.
-- `analogWrite` doesn't compile: ESP32 Arduino core uses `ledcWrite` — update sketch.
+- PWMA/PWMB not toggling: confirm `ledcSetup` and `ledcAttachPin` ran before `ledcWrite`.
 
 ---
 
@@ -364,7 +363,6 @@ void loop() {}
 **What you're adding:** Battery/supply VM to TB6612, right motor connected to AO1/AO2.
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
-
 
 **Test sketch:**
 
@@ -429,7 +427,6 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/tb6612fng.md`](../hardware/tb6612fng.md)
 
-
 Extend the Step 5 sketch to drive Motor B:
 
 ```cpp
@@ -485,7 +482,6 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
 
-
 **Test sketch:**
 
 ```cpp
@@ -538,7 +534,6 @@ void loop() {
 **Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
 
 ⚠️ **GPIO 40/41 pick up TB6612 1 kHz PWM noise. Caps are not optional.**
-
 
 Extend the Step 7 sketch to add the left encoder with EMA filter:
 
@@ -601,7 +596,6 @@ void loop() {
 **What you're adding:** BNO055 breakout on I2C bus.
 
 **Hardware reference:** [`docs/hardware/bno055_imu.md`](../hardware/bno055_imu.md)
-
 
 **9.1 — Add libraries to `platformio.ini`:**
 ```ini
@@ -666,7 +660,6 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/ina219_battery_monitor.md`](../hardware/ina219_battery_monitor.md)
 
-
 **10.1 — Add library to `platformio.ini`:**
 ```ini
 lib_deps =
@@ -724,7 +717,6 @@ void loop() {
 **What you're adding:** RPLidar A1 M8 connected to Raspberry Pi.
 
 **Hardware reference:** [`docs/hardware/rplidar.md`](../hardware/rplidar.md)
-
 
 **11.1 — Install rplidar ROS 2 package on Pi:**
 ```bash
@@ -785,7 +777,6 @@ rviz2
 
 **Hardware reference:** [`docs/hardware/realsense_d435.md`](../hardware/realsense_d435.md)
 
-
 **12.1 — Install librealsense2 on Pi:**
 ```bash
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCD \
@@ -843,7 +834,6 @@ lsusb -t   # D435 must show 5000M — if 480M it's USB 2.0
 
 **Hardware reference:** [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
 
-
 **13.1 — Enable SPI on the Pi:**
 ```bash
 sudo raspi-config
@@ -900,8 +890,7 @@ The display must cycle through text, shapes, and a logo image.
 
 **What you're testing:** All components powered simultaneously. All sensors streaming. Robot moves on command. Watchdog stops it safely.
 
-
-The micro-ROS agent was built in Step 2. Run it on Pi:
+**Prerequisite — start micro-ROS agent on Pi** (built in Step 2):
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/local_setup.bash
@@ -909,7 +898,6 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
 ```
 
 For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 4–8 and verify manually.
-
 
 **14.1 — Verify all USB devices present:**
 ```bash
@@ -966,7 +954,7 @@ watch -n 2 "ros2 topic hz /diff_cont/odom /scan /camera/depth/points --window 20
 
 **Step 14 pass = Phase 0 complete. Proceed to Phase 1.**
 
-### Phase 0 complete when:
+**Phase 0 complete when:**
 - All hardware wired per GPIO map in CLAUDE.md
 - GPIO 40/41 EMI caps confirmed working (Step 8)
 - Common ground verified across all components
@@ -1035,7 +1023,7 @@ Initialize on same I2C bus (addr 0x40). Read bus voltage and current at 1 Hz.
 
 **The INA219 read and `/battery_state` publish must run in their own dedicated FreeRTOS task** — not inside the motor/PID loop or the micro-ROS spin loop. This is a hard requirement learned from a prior build: when battery monitoring shares execution context with motor control, running a motor test (or any blocking operation) pauses battery updates. The battery task must be able to read and publish at 1 Hz regardless of what the motor, encoder, or IMU tasks are doing.
 
-Implementation rule: create a `battery_task` pinned to a core with its own `vTaskDelay(pdMS_TO_TICKS(1000))` cadence. Never call the INA219 read from `loop()` or from within the PID task.
+Implementation rule: create a `battery_task` pinned to **core 0** with its own `vTaskDelay(pdMS_TO_TICKS(1000))` cadence. Pin the PID/motor task to **core 1** (where `loop()` runs). Never call the INA219 read from `loop()` or from within the PID task.
 
 **Step 7 — Safety watchdog**
 If no `/diff_cont/cmd_vel_unstamped` message is received within 500 ms, call `motors_stop()`. Watchdog must run independently of micro-ROS connection state — use a hardware timer or FreeRTOS timer, not a ROS callback.
@@ -1047,7 +1035,7 @@ Transport: USB serial (`Serial`, HWCDC). Publishers:
 - `/battery_state` — `sensor_msgs/BatteryState` at 1 Hz
 
 Subscriber:
-- `/diff_cont/cmd_vel_unstamped` — `geometry_msgs/Twist` — feed velocity targets to PID, reset watchdog
+- `/diff_cont/cmd_vel_unstamped` — `geometry_msgs/msg/Twist` — feed velocity targets to PID, reset watchdog
 
 Frame IDs: `odom` → `base_link` for odometry, `imu_link` for IMU.
 
@@ -1058,7 +1046,7 @@ Run on Pi with micro-ROS agent active:
 ros2 topic hz /diff_cont/odom      # must be ~30 Hz
 ros2 topic hz /imu/imu             # must be ~30 Hz
 ros2 topic echo /battery_state --once   # must show plausible voltage/current
-ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/Twist \
+ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
   "{linear: {x: 0.1}, angular: {z: 0.0}}" --once
 # robot should move forward briefly, then stop after watchdog timeout
 ```
@@ -1066,7 +1054,7 @@ ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/Twist \
 **Battery isolation check (required):** While the motors are actively spinning under a continuous velocity command, verify `/battery_state` keeps publishing without gaps:
 ```bash
 # Terminal 1 — continuous drive command
-ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/Twist \
+ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
   "{linear: {x: 0.2}, angular: {z: 0.0}}" --rate 20
 
 # Terminal 2 — battery must not skip beats during motor load
@@ -1109,7 +1097,7 @@ Define static frames relative to `base_link`:
 Frame positions must match physical sensor placement on the robot. Measure and record them.
 
 **Step 3 — Diff drive plugin**
-Add `libgazebo_ros_diff_drive` plugin (or `ros2_control` diff drive controller) configured for:
+Add the `ros2_control` diff drive controller configured for:
 - Left joint: `left_wheel`
 - Right joint: `right_wheel`
 - Wheel separation: 0.179 m
@@ -1170,7 +1158,7 @@ ros2 run rplidar_ros rplidar_composition --ros-args \
 ros2 topic hz /scan                       # must be ~5.5 Hz
 ros2 topic echo /scan --once | head -10   # ranges must not be all-zero or all-inf
 ```
-Do not proceed to Step 3.3 until these pass.
+Do not proceed to Step 3 until these pass.
 
 **Step 3 — RealSense driver**
 Launch `realsense2_camera` with:
@@ -1323,6 +1311,8 @@ BME680 environmental data streaming, RealSense depth integrated into Nav2 as a v
 Wire BME680 to I2C bus (addr 0x76). Read temperature, humidity, pressure, gas resistance. Publish as custom `robot_msgs/EnvData` or `sensor_msgs/Temperature` + `sensor_msgs/RelativeHumidity` at 1 Hz. Add to micro-ROS node.
 
 Library: https://github.com/adafruit/Adafruit_BME680 — add `adafruit/Adafruit BME680 Library` to `platformio.ini`. Confirm no address conflict with BNO055 (0x28) and INA219 (0x40) before wiring.
+
+**FreeRTOS isolation required:** The BME680 reads at 1 Hz on the shared I2C bus. Run it in the same `battery_task` (core 0) or a sibling task pinned to core 0 — never in `loop()` or the PID task. The same isolation rule that applies to INA219 applies here.
 
 **Step 2 — RealSense voxel layer**
 In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. Subscribe to `/camera/depth/points`. Tune height range to detect obstacles between 0.05 m and 1.5 m above floor.
