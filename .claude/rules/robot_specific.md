@@ -56,7 +56,7 @@ Costmap layers (in order):
 - Closed-loop PID velocity control only — encoder feedback → wheel velocity target in rad/s
 - Never use open-loop PWM for normal operation
 - Motor A = RIGHT wheel, Motor B = LEFT wheel — do not swap
-- PWM frequency: 1 kHz (LEDC) — audible but stable; upgrade to 10–20 kHz if whine is unacceptable
+- PWM frequency: **20 kHz** (LEDC) — inaudible motor whine, negligible heat increase on TB6612FNG
 - PID loop rate: 100 Hz
 
 PID output mapping:
@@ -87,15 +87,17 @@ void check_watchdog() {
 
 ## GPIO 40/41 EMI mitigation
 
-Left encoder (GPIO 40/41) picks up TB6612 1 kHz PWM noise. Two mitigations required:
+Left encoder (GPIO 40/41) picks up TB6612 20 kHz PWM switching noise. Two mitigations required:
 1. **Hardware**: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the encoder signal path (breadboard caps before ESP32 pins)
-2. **Firmware**: EMA velocity filter — `VEL_ALPHA = 0.2`
+2. **Firmware (fallback)**: EMA velocity filter — `VEL_ALPHA = 0.2`
+
+**Preferred firmware approach**: Use the ESP32-S3 PCNT hardware pulse counter (ESP32Encoder library — `madhephaestus/ESP32Encoder`) instead of `attachInterrupt` + EMA. PCNT has a built-in glitch filter, runs in hardware, and produces cleaner quadrature counts with no CPU overhead. Hardware caps are still required regardless of encoder approach.
 
 ## BNO055 on ESP32-S3 compatibility
 
-Requires **arduino-esp32 platform 6.x** (ESP-IDF 5.3.2+). Earlier platform versions have an I2C clock-stretching bug that causes BNO055 reads to fail silently. Pin correct in platformio.ini:
+Requires **arduino-esp32 ≥ 3.2.0** (espressif32 ≥ 6.3.0, ESP-IDF ≥ 5.4.0). Earlier versions have an I2C clock-stretching bug that makes BNO055 unreliable. Do NOT use arduino-esp32 3.3.6+ — it has a UART regression that breaks `Serial1.begin()` with custom GPIO pins (affects micro-ROS on GPIO 17/18). Pin in platformio.ini:
 ```ini
-platform = espressif32@^6.0.0
+platform = espressif32@^6.8.0
 ```
 
 ## Display daemon

@@ -556,7 +556,7 @@ void loop() {
 
 **Hardware reference:** [`docs/hardware/wheel_encoders.md`](../hardware/wheel_encoders.md)
 
-⚠️ **GPIO 40/41 pick up TB6612 1 kHz PWM noise. Caps are not optional.**
+⚠️ **GPIO 40/41 pick up TB6612 20 kHz PWM switching noise. Caps are not optional.**
 
 Extend the Step 7 sketch to add the left encoder with EMA filter:
 
@@ -1032,9 +1032,9 @@ set_microros_serial_transports(Serial1);
 
 **Step 2 — Motor driver**
 Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
-- PWMA (GPIO 10) → right motor, LEDC ch 0, 1 kHz, 8-bit
+- PWMA (GPIO 10) → right motor, LEDC ch 0, **20 kHz**, 8-bit
 - AIN1/AIN2 (GPIO 11/12) → right direction
-- PWMB (GPIO 13) → left motor, LEDC ch 1, 1 kHz, 8-bit
+- PWMB (GPIO 13) → left motor, LEDC ch 1, **20 kHz**, 8-bit
 - BIN1/BIN2 (GPIO 14/15) → left direction
 
 Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop()`.
@@ -1043,6 +1043,8 @@ Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop(
 Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.034 m`.
 
 Apply EMA filter on left encoder velocity (`VEL_ALPHA = 0.2`) to suppress GPIO 40/41 PWM noise.
+
+> **Recommended upgrade:** The ESP32-S3 PCNT (Pulse Counter) peripheral provides hardware quadrature decoding with a built-in glitch filter — no ISR, no EMA filter, no CPU overhead. Use the [ESP32Encoder](https://github.com/madhephaestus/ESP32Encoder) library (`madhephaestus/ESP32Encoder`). Replace the `attachInterrupt` + EMA approach with PCNT in Phase 1 firmware for cleaner, lower-jitter encoder counts. The EMA approach in the test sketch above is still valid for Phase 0 bench verification.
 
 **Step 4 — PID controller**
 One PID instance per wheel. Input: measured wheel velocity (rad/s). Output: PWM command. Run at 100 Hz in a FreeRTOS task or `loop()`. Expose tunable Kp, Ki, Kd constants via `#define` in a header.
