@@ -62,7 +62,13 @@ Duplicate VIN and GND pads — additional solder points for motor power wiring.
 ```
 LiPo Battery (3S = ~12V, or compatible 9–24V source)
     │
-    └── RPI5 PD Power Hat INPUT (DC barrel)
+[XT60 anti-spark connector]  ← prevents arcing on connect; required with caps on TB6612 VM
+    │
+[Main switch]
+    │
+[INA219 VIN+ → shunt → INA219 VIN−]  ← measures total current before rail split
+    │
+    ├── RPI5 PD Power Hat INPUT (DC barrel)
             │
             ├── OUTPUT USB-C (5.15V / 5A, USB PD 3.0)
             │       └── Raspberry Pi 5 USB-C power port
@@ -88,6 +94,8 @@ TB6612 logic VCC → ESP32 3V3 pin (not from hat directly)
 
 ## Notes
 
+- **Anti-spark connector:** Use an XT60 anti-spark connector on the battery. The 1000µF cap on TB6612 VM will arc and degrade connectors without it on every power-up.
+- **Battery sag:** A 3S LiPo at low charge hits ~9.6V at rest; under motor load it can sag below 9V and brown out the Pi. Set a conservative low-voltage alarm (10V under load) or add an MT3608 boost converter between the battery and the DC barrel input (set to 15V) to eliminate sag entirely.
 - **Battery chemistry:** Confirm voltage stays within 9–24V at both full charge and cutoff. A 3S LiPo (12.6V full, 9.9V cutoff) fits well. A 4S LiPo (16.8V full) also fits.
 - **PD voltage selection:** When using the DC barrel (not USB PD input), PD negotiation is not involved — the converter regulates directly from barrel voltage to 5V.
 - **5V rail budget:** Pi 5 (~25W) + RealSense (~4.5W) + RPLidar (~2W) + ESP32 (~0.5W) = ~32W peak. The hat's 40W cap gives ~8W of headroom — adequate for this build.

@@ -63,7 +63,7 @@ Motor A = **RIGHT** | Motor B = **LEFT**
 
 ## Power Notes
 
-- VM decoupling: 100µF electrolytic + 100nF ceramic in parallel, placed close to the VM and GND pins.
+- VM decoupling: **1000µF electrolytic + 100nF ceramic** in parallel, placed close to the VM and GND pins. Motor direction reversals and braking inject voltage spikes back onto the battery rail — the 1000µF cap absorbs them before they reach the Pi power circuit or INA219.
 - Keep motor output wires (AO1/AO2, BO1/BO2) short and physically separated from signal wires.
 
 ---

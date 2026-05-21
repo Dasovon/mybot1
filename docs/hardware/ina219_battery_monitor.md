@@ -39,7 +39,11 @@ The battery monitor operates **independently of ROS, Wi-Fi, and the development 
 | VIN− | High-side − input (connect toward load) |
 | A0, A1 | Address select — both open/GND = **0x40** |
 
-Current flows from VIN+ through the onboard 0.1 Ω shunt to VIN−. Place the INA219 in series with the positive supply rail. I2C address: **0x40**. Shares bus with BNO055 (0x28).
+Current flows from VIN+ through the onboard 0.1 Ω shunt to VIN−. Place the INA219 **on the main positive rail after the main power switch and before the Pi/motor rail split** — this position measures total robot current draw (Pi + motors combined), giving the most useful data. I2C address: **0x40**. Shares bus with BNO055 (0x28).
+
+> **Recommended wiring order:** Battery (+) → Main switch → INA219 VIN+ → shunt → INA219 VIN− → split to (Power Hat DC barrel) and (TB6612 VM)
+
+> **Optional:** Add a blade fuse between INA219 VIN− and TB6612 VM on the motor branch. Cheap insurance against a motor short taking out the whole rail.
 
 ---
 
