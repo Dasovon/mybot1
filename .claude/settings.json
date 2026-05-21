@@ -1,0 +1,9 @@
+{
+  "env": {
+    "ROS_DISTRO": "humble",
+    "COLCON_DEFAULTS_DIR": ".colcon"
+  },
+  "additionalDirectories": [
+    "src"
+  ]
+}

@@ -446,10 +446,12 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 | Device | ESP32-S3 Pin | I2C Address | Notes |
 |--------|-------------|-------------|-------|
-| BNO055 SDA | IO17 | 0x28 | same I2C bus as INA219 |
-| BNO055 SCL | IO16 | | |
-| INA219 SDA | IO17 | 0x40 | same I2C bus as BNO055 |
-| INA219 SCL | IO16 | | |
+| BNO055 SDA | GPIO 8 | 0x28 | shared I2C bus with INA219 and BME680 |
+| BNO055 SCL | GPIO 9 | | |
+| INA219 SDA | GPIO 8 | 0x40 | shared I2C bus |
+| INA219 SCL | GPIO 9 | | |
+| BME680 SDA | GPIO 8 | 0x76 | not yet wired — Phase 6 |
+| BME680 SCL | GPIO 9 | | |
 | BNO055 VCC | 3.3V | | |
 | INA219 VCC | 3.3V | | |
 | BNO055 GND | GND | | |
@@ -459,17 +461,19 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 | ESP32-S3 | TB6612 | Notes |
 |----------|--------|-------|
-| PWM pin A | PWMA | Motor A speed |
-| PWM pin B | PWMB | Motor B speed |
-| AIN1 pin | AIN1 | Motor A direction |
-| AIN2 pin | AIN2 | Motor A direction |
-| BIN1 pin | BIN1 | Motor B direction |
-| BIN2 pin | BIN2 | Motor B direction |
-| STBY pin | STBY | Pull HIGH to enable |
+| GPIO 10 (LEDC ch 0) | PWMA | Right motor speed, 1 kHz 8-bit PWM |
+| GPIO 11 | AIN1 | Right motor direction A |
+| GPIO 12 | AIN2 | Right motor direction B |
+| GPIO 13 (LEDC ch 1) | PWMB | Left motor speed, 1 kHz 8-bit PWM |
+| GPIO 14 | BIN1 | Left motor direction A |
+| GPIO 15 | BIN2 | Left motor direction B |
+| — | STBY | Not wired — Adafruit board has 10 kΩ pull-up (always HIGH) |
 | 3.3V | VCC | Logic power |
 | GND | GND | |
 
-> **Note:** Specific GPIO pin numbers TBD — assign intentionally based on physical layout before wiring. Do not inherit MyBot's pin assignments.
+**Motor A = RIGHT, Motor B = LEFT.** Do not swap.
+
+⚠️ VM carries battery voltage (12V+). Keep VM wiring physically separate from all signal pins.
 
 #### TB6612 → Motors
 
@@ -482,12 +486,16 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 | Encoder | ESP32-S3 Pin | Notes |
 |---------|-------------|-------|
-| Left enc A | TBD GPIO | interrupt-capable pin |
-| Left enc B | TBD GPIO | interrupt-capable pin |
-| Right enc A | TBD GPIO | interrupt-capable pin |
-| Right enc B | TBD GPIO | interrupt-capable pin |
-| VCC (×2) | 3.3V | verify encoder voltage rating |
+| Left enc A | GPIO 40 | `attachInterrupt` CHANGE ⚠️ EMI — 100 nF cap to GND required |
+| Left enc B | GPIO 41 | read in ISR ⚠️ EMI — 100 nF cap to GND required |
+| Right enc A | GPIO 42 | `attachInterrupt` CHANGE |
+| Right enc B | GPIO 39 | read in ISR |
+| VCC (×2) | 3.3V | JGA25-371 encoder power (Blue/Black wires) |
 | GND (×2) | GND | |
+
+Wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder power, Yellow = Ch A, Green = Ch B.
+
+⚠️ GPIO 40/41 (left encoder) picks up TB6612 1 kHz PWM noise. Add 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the signal path. EMA filter (VEL_ALPHA = 0.2) in firmware also required.
 
 #### Pi 5 → OLED Display (SPI)
 
@@ -522,9 +530,18 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 **1000µF cap on TB6612 VM** — absorbs motor switching noise before it hits the rest of the system.
 
-### Things Still To Decide
+### Hardware Decisions — Status
 
-- **Specific ESP32-S3 GPIO assignments** for TB6612 and encoders — lock these in based on physical board layout before soldering
-- **LiPo connector type** — XT30 or XT60, standardize across both robots
-- **Optional blade fuse** on motor rail between INA219 VIN- and TB6612 VM — cheap insurance
-- **Optional boost converter** on Pi power rail if battery sag under load is a concern
+| Decision | Status | Value |
+|----------|--------|-------|
+| ESP32-S3 GPIO for TB6612 | ✅ Confirmed | GPIO 10–15 (see wiring table above) |
+| ESP32-S3 GPIO for encoders | ✅ Confirmed | GPIO 39–42 (see wiring table above) |
+| I2C pins | ✅ Confirmed | GPIO 8 (SDA), GPIO 9 (SCL) |
+| micro-ROS serial | ✅ Confirmed | Serial1, GPIO 17 TX / 18 RX, `/dev/ttyUSB0` |
+| Display telemetry serial | ✅ Confirmed | Serial0, USB CDC, `/dev/ttyACM0` |
+| Encoder CPR | ✅ Validated on floor | 1010 counts/rev |
+| Wheel radius | ✅ Measured | 0.034 m |
+| Wheel separation | ✅ Measured | 0.179 m |
+| LiPo connector type | ⏳ Undecided | XT30 or XT60 — standardize across both robots |
+| Blade fuse on motor rail | ⏳ Optional | Between INA219 VIN- and TB6612 VM — cheap insurance |
+| Boost converter on Pi rail | ⏳ Optional | MT3608 set to 15V — eliminates battery sag risk under load |
