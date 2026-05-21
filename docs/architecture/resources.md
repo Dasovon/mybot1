@@ -52,6 +52,42 @@ https://discourse.openrobotics.org/t/agenticros-connects-ros-with-openclaw-claud
 
 AgenticROS supports four deployment modes: same machine (local DDS), local network (WebSocket via rosbridge), cloud/remote (WebRTC with NAT traversal), and Zenoh. It supports Nav2 goals, `/cmd_vel` velocity commands, camera frame capture, and battery/sensor queries. The local network mode is a natural fit — Claude Code on your dev machine at `192.168.86.52` talking to MyBot at `192.168.86.33`. The battery state query via `/battery_state` maps directly to your INA219 data. Worth watching closely.
 
+**Status:** Early-stage / pre-release — limited public documentation as of May 2026. Watch the repo: https://github.com/agenticros/agenticros-skills
+
+**Four deployment modes:**
+
+| Mode | Transport | Use case |
+|------|-----------|----------|
+| A — Same machine | DDS (native) | Agent runs on the Pi directly |
+| B — Local network | WebSocket → rosbridge_server | **Best fit for mybot1** — Claude Code on dev PC talks to Pi over LAN |
+| C — Cloud/remote | WebRTC + STUN/TURN | Fleet / remote ops behind NAT |
+| D — Zenoh | zenoh-ts WebSocket → Zenoh router | Low-latency, no rosbridge dependency |
+
+**Mode B for mybot1:**
+```
+Claude Code (dev PC 192.168.86.52)
+  → AgenticROS plugin
+      → WebSocket → rosbridge_server on Pi (192.168.86.33)
+          → /diff_cont/cmd_vel_unstamped
+          → /battery_state  (INA219 data)
+          → Nav2 NavigateToPose action
+          → /camera/color/image_raw
+```
+Requires `rosbridge_server` running on the Pi: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`
+
+**Skills architecture:**
+- Plugin system: skills register as tools via `registerSkill(api, config, context)`
+- Config lives under `plugins.entries.agenticros.config.skillPackages` — tune without code changes
+- Reference skill: `agenticros-skill-followme` (depth-based person tracking with optional VLM)
+- Skills publish to `cmd_vel` and query camera feeds — same interfaces mybot1 already exposes
+
+**mybot1 topic mapping:**
+- `/cmd_vel` in AgenticROS docs → `/diff_cont/cmd_vel_unstamped` in mybot1
+- `/battery_state` matches directly — INA219 data already published at 1 Hz
+- Camera: `/camera/color/image_raw` (RealSense D435)
+
+**Target phase: Phase 5+.** Requires rosbridge on Pi and Nav2 running. Mode B is zero-config once rosbridge is installed.
+
 ---
 
 ### Tier 2 — Useful Background / Future Work
