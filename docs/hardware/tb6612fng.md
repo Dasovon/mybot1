@@ -55,9 +55,21 @@ Motor A = **RIGHT** | Motor B = **LEFT**
 
 ## PWM Configuration
 
-- Use a PWM frequency between 10–20 kHz to reduce audible motor whine.
+- **Use 20 kHz PWM** — eliminates audible motor whine with negligible heat increase on the TB6612FNG. The chip supports up to 100 kHz.
+- At 1 kHz (the ESP32 LEDC default), whine is clearly audible. At 20 kHz it is inaudible.
+- 8-bit resolution (256 steps) is fully supported at 20 kHz on ESP32 LEDC.
 - PWM duty cycle maps linearly to motor speed.
 - The PID controller outputs a target velocity in rad/s; the firmware maps this to a PWM duty cycle.
+
+```cpp
+// Correct LEDC setup — 20 kHz, 8-bit
+ledcSetup(0, 20000, 8);  // channel 0, 20 kHz, 8-bit — right motor
+ledcSetup(1, 20000, 8);  // channel 1, 20 kHz, 8-bit — left motor
+ledcAttachPin(PWMA, 0);
+ledcAttachPin(PWMB, 1);
+```
+
+> ⚠️ **EMI note:** Even at 20 kHz the left encoder (GPIO 40/41) can pick up noise from motor switching. Hardware 100 nF caps from GPIO 40/41 to GND are still required. If using the PCNT hardware encoder (recommended), the PCNT glitch filter provides additional noise rejection without software EMA filtering.
 
 ---
 

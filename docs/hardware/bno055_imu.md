@@ -99,13 +99,15 @@ imu0_relative: false
 
 ## ESP32-S3 I2C Compatibility Warning
 
-> ⚠️ **The BNO055 violates the I2C protocol in some circumstances and does not work reliably with all ESP32/ESP32-S3 firmware versions.**
+> ⚠️ **The BNO055 uses I2C clock stretching and does not work reliably with older ESP32-S3 firmware versions.**
 >
-> The underlying issue is in the ESP-IDF I2C driver. ESP-IDF **5.3.2 and later** handle the BNO055 quirks correctly. Older versions (ESP-IDF 4.x, used by arduino-esp32 2.x) are unreliable.
+> The underlying issue is in the ESP-IDF I2C clock-stretching implementation. **arduino-esp32 ≥ 3.2.0** (ESP-IDF ≥ 5.4.0) fixes it. Earlier versions (arduino-esp32 2.x / ESP-IDF 4.x) are unreliable.
 >
-> **Required:** PlatformIO `platform = espressif32` version **6.x or later** (bundles ESP-IDF 5.x). If I2C hangs or returns garbage on startup, check your arduino-esp32 platform version first.
+> **Required in platformio.ini:** `platform = espressif32@^6.3.0` or later (PlatformIO espressif32 6.x bundles arduino-esp32 3.x).
 >
-> Symptoms of a version mismatch: I2C timeouts on boot, sensor reads returning 0xFF, or the sensor appearing to initialize but returning junk orientation data.
+> **Do not use arduino-esp32 3.3.6+** — that version has a separate UART pin-assignment regression that breaks `Serial1.begin()` with custom GPIO pins (affects micro-ROS transport on GPIO 17/18). Pin to a known-good version — see build_plan.md Step 3.
+>
+> Symptoms of a version mismatch: I2C timeouts on boot, `bno.begin()` returns false, sensor reads returning 0xFF, or the sensor appearing to initialize but returning junk orientation data.
 
 ---
 

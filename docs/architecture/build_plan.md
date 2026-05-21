@@ -118,14 +118,16 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
-**2.1 — Flash Raspberry Pi OS**
+**2.1 — Flash Ubuntu 22.04 LTS**
+
+> ⚠️ **Must use Ubuntu 22.04 LTS (64-bit) — not Raspberry Pi OS.** ROS 2 Humble binary packages are only published for Ubuntu 22.04 arm64. Raspberry Pi OS (Bookworm/Debian 12) requires compiling ROS2 from source.
 
 Download and install Raspberry Pi Imager on your dev PC:
 https://www.raspberrypi.com/software/
 
 In the Imager:
 1. Choose device: **Raspberry Pi 5**
-2. Choose OS: **Raspberry Pi OS (64-bit)** — full desktop or lite
+2. Choose OS: **Other general-purpose OS → Ubuntu → Ubuntu Server 22.04 LTS (64-bit)**
 3. Choose storage: your microSD card (≥32GB recommended)
 4. Click the gear icon (⚙) before writing and configure:
    - Set hostname (e.g. `mybot`)
@@ -154,6 +156,21 @@ ssh ryan@mybot.local
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 sudo reboot
+```
+
+**2.3a — Enable full USB port power**
+
+The Pi 5 limits USB ports to 600mA if it doesn't detect a 5V/5A supply. Third-party power hats may not advertise 5A in a way the Pi recognizes. RPLidar peaks at ~500mA and RealSense at ~900mA — both are at risk without this flag.
+
+```bash
+echo "[all]" | sudo tee -a /boot/firmware/config.txt
+echo "usb_max_current_enable=1" | sudo tee -a /boot/firmware/config.txt
+sudo reboot
+```
+
+After reboot verify no undervoltage events:
+```bash
+vcgencmd get_throttled   # must return 0x0
 ```
 
 **2.4 — Install ROS 2 Humble on Pi**
@@ -253,7 +270,7 @@ In PlatformIO Home → New Project:
 Add the required build flags to `platformio.ini`:
 ```ini
 [env:esp32-s3-devkitc-1]
-platform = espressif32
+platform = espressif32@^6.8.0
 board = esp32-s3-devkitc-1
 framework = arduino
 build_flags =
@@ -262,6 +279,12 @@ build_flags =
 monitor_speed = 115200
 upload_protocol = esptool
 ```
+
+> ⚠️ **Platform version must be pinned.** Two known constraints:
+> - **Minimum ≥ 6.3.0** — earlier versions have an I2C clock-stretching bug that makes BNO055 unreliable (ESP-IDF < 5.4.0).
+> - **arduino-esp32 3.3.6+ has a UART regression** — `Serial1.begin()` with custom GPIO pins (our GPIO 17/18 for micro-ROS) silently fails. As of May 2026, avoid the latest PlatformIO espressif32 release if it bundles arduino-esp32 ≥ 3.3.6. `espressif32@^6.8.0` pins to a known-good range. If micro-ROS stops responding after a PlatformIO update, check `pio pkg show espressif32` and downgrade if arduino-esp32 is 3.3.6+.
+>
+> Verify the arduino-esp32 version bundled: `pio pkg show espressif32 | grep arduino-esp32`
 
 **3.3 — Flash a blink sketch to confirm toolchain**
 
@@ -329,8 +352,8 @@ void setup() {
     pinMode(PWMA, OUTPUT); pinMode(PWMB, OUTPUT);
     digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
     digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
-    ledcSetup(0, 1000, 8); ledcAttachPin(PWMA, 0);
-    ledcSetup(1, 1000, 8); ledcAttachPin(PWMB, 1);
+    ledcSetup(0, 20000, 8); ledcAttachPin(PWMA, 0);
+    ledcSetup(1, 20000, 8); ledcAttachPin(PWMB, 1);
     ledcWrite(0, 128);
     ledcWrite(1, 128);
     Serial.println("TB6612 logic test running");
@@ -373,7 +396,7 @@ void loop() {}
 #define AIN1 11
 #define AIN2 12
 #define PWMA 10
-#define PWM_FREQ   1000
+#define PWM_FREQ   20000
 #define PWM_RES    8
 #define PWM_CH     0
 
@@ -435,7 +458,7 @@ Extend the Step 5 sketch to drive Motor B:
 
 #define AIN1 11  #define AIN2 12  #define PWMA 10
 #define BIN1 14  #define BIN2 15  #define PWMB 13
-#define PWM_FREQ 1000  #define PWM_RES 8
+#define PWM_FREQ 20000  #define PWM_RES 8
 #define PWM_CHA 0      #define PWM_CHB 1
 
 void setup() {

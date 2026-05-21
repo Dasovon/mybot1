@@ -94,8 +94,31 @@ Use an NVMe SSD via the Pi 5 PCIe M.2 HAT for rosbag recording. microSD cards ar
 
 ## Setup Notes
 
+### OS requirement
+**Ubuntu 22.04 LTS (64-bit) is required** — not Raspberry Pi OS. ROS 2 Humble binary packages (`ros-humble-*`) are only published for Ubuntu 22.04 arm64 (Tier 1 support). Raspberry Pi OS (Bookworm/Debian 12) is Tier 3 — ROS2 would require compiling from source.
+
+Use Raspberry Pi Imager → Other general-purpose OS → Ubuntu → **Ubuntu Server 22.04 LTS (64-bit)**.
+
+### USB power — required config.txt entry
+The Pi 5 limits USB port power to 600mA if it doesn't successfully negotiate 5V/5A with the power supply. The RPI5 PD Power Hat may not advertise 5V/5A in a way the Pi recognizes. Without this flag, RPLidar (~500mA peak) and RealSense (~900mA) are at risk of undervoltage.
+
+Add to `/boot/firmware/config.txt`:
+```ini
+[all]
+usb_max_current_enable=1
+```
+
+This allows USB ports to draw up to 1600mA instead of 600mA. Set it before connecting any USB peripherals.
+
+Alternatively, use `raspi-config` → Performance Options → P4 USB Current (persistent).
+
+Verify after reboot:
 ```bash
-# Set static device names via udev
+vcgencmd get_throttled   # expect 0x0 — no throttling or undervoltage events
+```
+
+### udev rules — static device names
+```bash
 # /etc/udev/rules.d/99-robot.rules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", SYMLINK+="esp32"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60",  SYMLINK+="rplidar"
