@@ -352,6 +352,52 @@ Every package under `src/` must have a `README.md` covering:
 - All services and actions
 - All parameters with type, description, and default value
 
+### QoS (Quality of Service)
+Define QoS profiles in YAML config files — never hardcode them in node source. This lets you tune reliability and history without recompiling.
+
+QoS profiles for this project:
+
+| Topic | Profile | Reason |
+|---|---|---|
+| `/diff_cont/odom`, `/imu/imu` | `sensor_data` (BEST_EFFORT, VOLATILE) | 30 Hz — a dropped message is immediately replaced |
+| `/scan` | `sensor_data` (BEST_EFFORT, VOLATILE) | 5.5 Hz sensor stream |
+| `/camera/depth/points`, `/camera/color/image_raw` | `sensor_data` (BEST_EFFORT, VOLATILE) | High-bandwidth, latency-sensitive |
+| `/diff_cont/cmd_vel_unstamped` | `system_default` (RELIABLE, VOLATILE) | Safety-critical — must not silently drop velocity commands |
+| `/battery_state` | `system_default` (RELIABLE, VOLATILE) | Low rate, must not miss battery cutoff alerts |
+| `/map`, `/odom`, `/tf` | `system_default` (RELIABLE, TRANSIENT_LOCAL) | State data — late-joining nodes must receive last known value |
+
+In Python nodes, set QoS via `rclpy.qos.QoSProfile`. In C++ nodes, use `rclcpp::QoS`. Load the profile selection from the node's YAML config so it can be overridden without code changes.
+
+### Node Architecture Pattern (Odom / IMU Pipeline)
+The encoder-to-odometry pipeline in this project is directly analogous to the Henki speed monitor example. Apply the same before/after pattern:
+
+**Do not do this** (logic inside the ROS callback):
+```python
+def odom_callback(self, msg):
+    # raw encoder math, unit conversion, filtering all here
+    speed_mps = msg.twist.twist.linear.x
+    speed_kph = speed_mps * 3.6
+    self.publisher_.publish(...)
+```
+
+**Do this instead** (logic in a separate class):
+```python
+# odometry_converter.py — no ROS imports, fully unit-testable
+class OdometryConverter:
+    def compute_speed(self, linear_x_mps):
+        return linear_x_mps * 3.6, linear_x_mps * 2.237
+
+# esp32_bridge_node.py — ROS layer only
+class Esp32BridgeNode(Node):
+    def __init__(self):
+        self._converter = OdometryConverter()  # plain class, no ROS
+    def odom_callback(self, msg):
+        kph, mph = self._converter.compute_speed(msg.twist.twist.linear.x)
+        self.publisher_.publish(...)
+```
+
+This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion), `robot_localization` config (EKF math lives in the library, not the node), and any future sensor processing nodes.
+
 ### Testing
 - Unit-test core application logic (the plain class, not the ROS node). Logic separated from ROS needs no ROS environment to test.
 - Integration-test ROS communication behavior (topic flow, parameter loading, launch files).
