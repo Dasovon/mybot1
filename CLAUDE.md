@@ -70,10 +70,10 @@ Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one r
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWMA — Right motor speed (LEDC ch 0, 1 kHz, 8-bit) |
+| 10 | PWMA — Right motor speed (LEDC ch 0, 20 kHz, 8-bit) |
 | 11 | AIN1 — Right motor direction A |
 | 12 | AIN2 — Right motor direction B |
-| 13 | PWMB — Left motor speed (LEDC ch 1, 1 kHz, 8-bit) |
+| 13 | PWMB — Left motor speed (LEDC ch 1, 20 kHz, 8-bit) |
 | 14 | BIN1 — Left motor direction A |
 | 15 | BIN2 — Left motor direction B |
 | 17 | UART1 TX — Serial1 micro-ROS transport to Pi (via USB-UART adapter) |
