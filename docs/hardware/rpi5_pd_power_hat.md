@@ -1,8 +1,8 @@
-# RPI5 PD Power Hat — Power Distribution Board
+# EP-0225 (52pi) — Power Distribution Board
 
 ## Role in This Project
 
-The RPI5 PD Power Hat is the power distribution board for this build. It accepts a battery input (9–24V DC) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
+The EP-0225 (52pi) is the power distribution board for this build. It accepts a battery input (9–24V DC via DC barrel jack) and delivers regulated 5V/8A to the Raspberry Pi 5 via USB PD 3.0, plus a raw VIN passthrough for motor power.
 
 ---
 
@@ -10,7 +10,7 @@ The RPI5 PD Power Hat is the power distribution board for this build. It accepts
 
 | Property | Value |
 |---|---|
-| Model | P01 |
+| Model | EP-0225 (52pi) |
 | Input | USB PD (default 15V) or DC barrel (9–24V) |
 | Output 1 | USB PD 3.0, 5.15V / 5A (to Raspberry Pi 5 USB-C) |
 | Output 2 | 5V VBUS (screw terminal / header) |
@@ -68,7 +68,7 @@ LiPo Battery (3S = ~12V, or compatible 9–24V source)
     │
 [INA219 VIN+ → shunt → INA219 VIN−]  ← measures total current before rail split
     │
-    ├── RPI5 PD Power Hat INPUT (DC barrel)
+    ├── EP-0225 (52pi) INPUT (DC barrel)
             │
             ├── OUTPUT USB-C (5.15V / 5A, USB PD 3.0)
             │       └── Raspberry Pi 5 USB-C power port

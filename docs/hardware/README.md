@@ -4,7 +4,7 @@ Wiring for each component is determined at the corresponding build gate in `docs
 
 | Component | Role | Doc |
 |---|---|---|
-| RPI5 PD Power Hat | Power distribution — 9–24V in → 5V/8A USB PD + VIN motor | [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md) |
+| EP-0225 (52pi) | Power distribution — 9–24V in → 5V/8A USB PD + VIN motor | [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md) |
 | DFR0205 | Alternative power board — not used in this build | [dfr0205.md](dfr0205.md) |
 | ESP32-S3-DevKitC-1 | Embedded motion controller | [esp32_s3.md](esp32_s3.md) |
 | Raspberry Pi 5 | Sensor bridge / ROS interface | [raspberry_pi_5.md](raspberry_pi_5.md) |

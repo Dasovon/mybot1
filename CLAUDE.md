@@ -32,7 +32,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 
 | Component | Model | Interface | Layer |
 |---|---|---|---|
-| Power | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
+| Power | EP-0225 (52pi) | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
 | Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Serial1 UART (GPIO 17/18) → USB adapter → Pi `/dev/ttyUSB0` (micro-ROS) \| Serial0 USB CDC → Pi `/dev/ttyACM0` (display telemetry) | ESP32 |
 | Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
@@ -50,7 +50,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 
 ```
 Battery (9–24V DC, e.g. 3S LiPo ~12V)
-    └── RPI5 PD Power Hat INPUT (DC barrel)
+    └── EP-0225 (52pi) INPUT (DC barrel)
             ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
             │       ├── Pi USB-A  →  ESP32-S3 Serial1 UART adapter  (micro-ROS, /dev/ttyUSB0)
             │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)

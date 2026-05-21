@@ -42,7 +42,7 @@ The Raspberry Pi 5 is the onboard compute node. It acts as the sensor bridge bet
 | RPLidar A1 | USB-A (USB 2.0 OK) | `/dev/rplidar` (udev symlink) | CP2102, VID:10c4 PID:ea60 |
 | RealSense D435 | USB-A (**USB 3.0 — blue**) | Managed by librealsense | **Must be USB 3.0** — USB 2.0 bandwidth insufficient |
 
-Power is provided by the **RPI5 PD Power Hat** via USB PD 3.0 (5.15V/5A) to the Pi 5 USB-C power port. See [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md).
+Power is provided by the **EP-0225 (52pi)** via USB PD 3.0 (5.15V/5A) to the Pi 5 USB-C power port. See [rpi5_pd_power_hat.md](rpi5_pd_power_hat.md).
 
 ---
 
@@ -100,7 +100,7 @@ Use an NVMe SSD via the Pi 5 PCIe M.2 HAT for rosbag recording. microSD cards ar
 Use Raspberry Pi Imager → Other general-purpose OS → Ubuntu → **Ubuntu Server 22.04 LTS (64-bit)**.
 
 ### USB power — required config.txt entry
-The Pi 5 limits USB port power to 600mA if it doesn't successfully negotiate 5V/5A with the power supply. The RPI5 PD Power Hat may not advertise 5V/5A in a way the Pi recognizes. Without this flag, RPLidar (~500mA peak) and RealSense (~900mA) are at risk of undervoltage.
+The Pi 5 limits USB port power to 600mA if it doesn't successfully negotiate 5V/5A with the power supply. The EP-0225 (52pi) may not advertise 5V/5A in a way the Pi recognizes. Without this flag, RPLidar (~500mA peak) and RealSense (~900mA) are at risk of undervoltage.
 
 Add to `/boot/firmware/config.txt`:
 ```ini

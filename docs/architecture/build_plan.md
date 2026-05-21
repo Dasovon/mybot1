@@ -85,7 +85,7 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 ### Step 1 — Power Hat + Bench Supply
 
-**What you're adding:** RPI5 PD Power Hat P01 connected to bench power supply (or LiPo battery).
+**What you're adding:** EP-0225 (52pi) power hat connected to bench power supply (or LiPo battery).
 
 **Software used:** None — multimeter only.
 
