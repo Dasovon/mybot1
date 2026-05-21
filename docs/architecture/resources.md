@@ -21,6 +21,32 @@ https://medium.com/@itsrarjun/controlling-a-ros2-robot-with-claude-using-mcp-317
 
 This covers exposing ROS2 capabilities as MCP tools — topics like `/cmd_vel`, actions, services, and sensor data — so Claude can send commands in natural language that map directly to ROS2 pub/sub and action servers. Once your ESP32-S3 microROS bridge is running and topics are flowing, this pattern lets you drive, inspect, and debug the robot by talking to it. Particularly useful for your Nav2 + SLAM setup once mapping is working.
 
+**Target phase: Phase 5+ (Nav2 running).** Use earlier (Phase 1–3) for manual drive testing and sensor inspection before Nav2 is up.
+
+**Architecture for mybot1:**
+```
+Claude (MCP client)
+  → MCP server (Python + rclpy, sourced into ROS2 env on Pi or dev PC)
+      → publishes to /diff_cont/cmd_vel_unstamped  (CONTROL_QOS / RELIABLE)
+      → subscribes to /diff_cont/odom, /scan, /battery_state
+      → calls Nav2 NavigateToPose action server
+```
+
+**Useful tools to expose:**
+- `drive(linear_m_s, angular_rad_s)` → publishes `geometry_msgs/Twist` to `/diff_cont/cmd_vel_unstamped`
+- `stop()` → publishes zero-velocity Twist
+- `get_battery()` → reads latest `/battery_state` message (INA219 data)
+- `get_scan_hz()` → wraps `ros2 topic hz /scan` — confirms LiDAR is live
+- `navigate_to(x, y, theta)` → sends `NavigateToPose` action goal to Nav2
+- `get_odom()` → reads latest `/diff_cont/odom` for position/velocity
+
+**mybot1-specific implementation notes:**
+- The MCP server process must `source ~/bot_ws/install/setup.bash` before importing `rclpy`
+- `/cmd_vel` here is `/diff_cont/cmd_vel_unstamped` — use CONTROL_QOS (RELIABLE/VOLATILE), not default QoS
+- Nav2 goal tool needs the `NavigateToPose` action client, not just a topic publisher
+- Camera tool reads `/camera/color/image_raw` with SENSOR_QOS (BEST_EFFORT)
+- The article is conceptual only — no code provided. Write the MCP server from scratch using `rclpy` directly
+
 #### AgenticROS
 https://discourse.openrobotics.org/t/agenticros-connects-ros-with-openclaw-claude-code-desktop-dispatch-and-google-gemini/53699
 
