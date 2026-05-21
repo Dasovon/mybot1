@@ -102,7 +102,7 @@ voxel_layer:
 
 ## Performance Notes
 
-- On Raspberry Pi 5, limit depth resolution to 640×480 at 30 FPS for stable USB 3.0 throughput.
+- On Raspberry Pi 5, operate at 640×480 @ 15 FPS — this is the confirmed operating config for stable USB 3.0 throughput and Pi CPU headroom.
 - Point cloud processing (voxel filtering, passthrough) should run on the **development PC**, not the Pi.
 - Use `depth_registered` streams when aligning depth to color for semantic fusion.
 - Keep USB cable short (< 1 m) to avoid bandwidth degradation.

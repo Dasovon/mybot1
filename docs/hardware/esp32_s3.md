@@ -44,13 +44,15 @@ All GPIO is 3.3V logic. 3V3 pin powers TB6612 logic, BNO055, INA219, and BME680 
 |---|---|---|
 | 8 | I2C SDA | BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL | Adafruit breakouts have onboard pull-ups — no external needed |
-| 10 | PWMA — Right motor speed | LEDC ch 0, 1 kHz, 8-bit |
+| 10 | PWMA — Right motor speed | LEDC ch 0, 20 kHz, 8-bit |
 | 11 | AIN1 — Right motor direction A | Motor A = RIGHT |
 | 12 | AIN2 — Right motor direction B | |
-| 13 | PWMB — Left motor speed | LEDC ch 1, 1 kHz, 8-bit |
+| 13 | PWMB — Left motor speed | LEDC ch 1, 20 kHz, 8-bit |
 | 14 | BIN1 — Left motor direction A | Motor B = LEFT |
 | 15 | BIN2 — Left motor direction B | |
-| 19, 20 | Native USB D−/D+ | HWCDC micro-ROS transport to Pi |
+| 17 | UART1 TX | Serial1 micro-ROS transport → USB-UART adapter → Pi `/dev/ttyUSB0` |
+| 18 | UART1 RX | Serial1 micro-ROS transport ← USB-UART adapter ← Pi `/dev/ttyUSB0` |
+| 19, 20 | Native USB D−/D+ | Serial0 display telemetry CDC → Pi `/dev/ttyACM0` |
 | 39 | Right encoder B | Read in ISR |
 | 40 | Left encoder A | `attachInterrupt` CHANGE ⚠️ EMI |
 | 41 | Left encoder B | Read in ISR ⚠️ EMI |
@@ -60,23 +62,26 @@ ISR direction logic: Left `A == B on CHANGE` → forward (+) | Right `A != B on 
 
 STBY not wired — Adafruit TB6612 breakout has onboard 10 kΩ pull-up (always enabled).
 
-⚠️ **GPIO 40/41 EMI:** Pick up 1 kHz PWM noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` attenuates in firmware. Hardware fix: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND, placed close to the ESP32 pins.
+⚠️ **GPIO 40/41 EMI:** Pick up 20 kHz PWM switching noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` attenuates in firmware. Hardware fix: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND, placed close to the ESP32 pins.
 
-micro-ROS transport: native USB HWCDC → Pi `/dev/ttyACM0`. Build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`.
+**Dual-serial architecture:**
+- **micro-ROS transport:** Serial1, GPIO 17 TX / GPIO 18 RX → USB-UART adapter → Pi `/dev/ttyUSB0`. Build flag: `-DMICRO_ROS_TRANSPORT_ARDUINO_SERIAL`.
+- **Display telemetry:** Serial0, native USB CDC (GPIO 19/20) → Pi `/dev/ttyACM0`. Build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`. Streams JSON at 2 Hz for OLED display daemon.
 
 ### Pins to Avoid (ESP32-S3 expansion base)
 
 | GPIO | Reason |
 |---|---|
 | 4, 5, 6, 7 | Not broken out on ESP32-S3 expansion board |
-| 19, 20 | Native USB D−/D+ — HWCDC transport |
+| 17, 18 | UART1 TX/RX — micro-ROS Serial1 transport — do not repurpose |
+| 19, 20 | Native USB D−/D+ — Serial0 display telemetry — do not repurpose |
 | 25, 26, 27, 32, 33 | Not broken out on ESP32-S3 expansion board |
 | 35, 36, 37 | Internal SPI flash/PSRAM — do not use |
 | 38 | Onboard RGB LED |
 | 43, 44 | UART0 TX/RX — not broken out |
 | 0, 45, 46 | Strapping pins — state matters at boot |
 
-> **Known EMI issue:** GPIO 40/41 (left encoder) pick up TB6612 1 kHz PWM noise.
+> **Known EMI issue:** GPIO 40/41 (left encoder) pick up TB6612 20 kHz PWM switching noise.
 > `VEL_ALPHA = 0.2` EMA filter attenuates it in firmware.
 > Hardware fix: route encoder wires through a breadboard and place 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND on the breadboard before connecting to the ESP32.
 
@@ -87,35 +92,36 @@ micro-ROS transport: native USB HWCDC → Pi `/dev/ttyACM0`. Build flag: `-DARDU
 | Loop | Rate | Tasks |
 |---|---|---|
 | Fast | 100 Hz | Encoder update, PID calculation, PWM output |
-| Medium | 50 Hz | IMU polling, velocity telemetry |
+| Medium | 30 Hz | IMU polling, odometry + IMU publish via micro-ROS |
 | Slow | 1–5 Hz | INA219 read, BME680 read, battery/env telemetry |
 | Safety | Continuous | Watchdog timeout check, emergency stop |
 
 ---
 
-## Serial Protocol
+## Serial Architecture — Dual Port
 
-**Connection:** USB CDC (appears as `/dev/ttyUSBx` or `/dev/ttyACMx` on Pi)
-**Baud rate:** 115200 (recommended)
-**Format:** ASCII, newline-terminated
+The ESP32-S3 uses **two independent serial connections** to the Pi:
 
-### Receive (from Pi)
+| Role | ESP32 | Pi device | Protocol |
+|---|---|---|---|
+| micro-ROS | Serial1, GPIO 17 TX / 18 RX → USB-UART adapter | `/dev/ttyUSB0` | micro-ROS binary (ROS 2 topics) |
+| Display telemetry | Serial0, native USB CDC (GPIO 19/20) | `/dev/ttyACM0` | JSON at 2 Hz |
 
-```
-V <left_rad_s> <right_rad_s>    # velocity command
-STOP                             # immediate stop
-PING                             # keepalive / health check
-```
+### Serial1 — micro-ROS (ROS 2 bridge)
 
-### Transmit (to Pi)
+Publishes ROS 2 messages to the Pi micro-ROS agent:
+- `/diff_cont/odom` — `nav_msgs/Odometry` at 30 Hz
+- `/imu/imu` — `sensor_msgs/Imu` at 30 Hz
+- `/battery_state` — `sensor_msgs/BatteryState` at 1 Hz
 
-```
-ENC <left_ticks> <right_ticks>
-VEL <left_rad_s> <right_rad_s>
-IMU <roll> <pitch> <yaw>
-BAT <voltage> <current> <power>
-ENV <temp> <humidity> <pressure> <gas>
-ERR <code>
+Subscribes:
+- `/diff_cont/cmd_vel_unstamped` — `geometry_msgs/Twist` — feeds PID targets, resets watchdog
+
+### Serial0 — Display telemetry (JSON)
+
+JSON stream at 2 Hz, read by the display daemon (`/dev/ttyACM0`):
+```json
+{"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
 ```
 
 ---

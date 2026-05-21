@@ -50,7 +50,7 @@ Power is provided by the **RPI5 PD Power Hat** via USB PD 3.0 (5.15V/5A) to the 
 
 | Node | Package | Topic(s) |
 |---|---|---|
-| `esp32_serial_bridge` | `esp32_serial_bridge` | `/odom`, `/imu`, `/battery_state`, `/cmd_vel` |
+| `esp32_serial_bridge` | `esp32_serial_bridge` | `/diff_cont/odom`, `/imu/imu`, `/battery_state`, `/diff_cont/cmd_vel_unstamped` |
 | `rplidar_node` | `rplidar_ros` | `/scan` |
 | `realsense2_camera_node` | `realsense2_camera` | `/camera/depth/*`, `/camera/color/*` |
 

@@ -16,12 +16,13 @@
 
 | Topic | Publisher | Consumer(s) |
 |---|---|---|
-| `/cmd_vel` | Nav2 | `esp32_serial_bridge` |
+| `/diff_cont/cmd_vel_unstamped` | Nav2 | ESP32 via micro-ROS |
+| `/diff_cont/odom` | ESP32 via micro-ROS | `robot_localization` EKF |
 | `/odom` | `robot_localization` | Nav2, `slam_toolbox` |
 | `/scan` | `rplidar_node` | `slam_toolbox`, Nav2 obstacle layer |
 | `/camera/depth/points` | `realsense2_camera` | Nav2 voxel layer |
-| `/imu` | `esp32_serial_bridge` | `robot_localization` |
-| `/battery_state` | `esp32_serial_bridge` | Monitoring nodes |
+| `/imu/imu` | ESP32 via micro-ROS | `robot_localization` EKF |
+| `/battery_state` | ESP32 via micro-ROS | Monitoring nodes |
 
 ## TF Tree
 

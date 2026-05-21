@@ -35,7 +35,7 @@ Do not skip stages. Each stage's pass criteria are prerequisites for the next.
 | `wheel_radius` | 0.034 m |
 | `wheel_separation` | 0.179 m |
 | PID loop rate | 100 Hz |
-| PWM frequency | 1 kHz (LEDC) |
+| PWM frequency | 20 kHz (LEDC) |
 | PWM resolution | 8-bit (0–255) |
 | Motor deadband | TBD — measured in Stage 1 |
 | Max wheel velocity | TBD — measured in Stage 1 |

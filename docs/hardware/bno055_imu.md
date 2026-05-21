@@ -103,7 +103,7 @@ imu0_relative: false
 >
 > The underlying issue is in the ESP-IDF I2C clock-stretching implementation. **arduino-esp32 ≥ 3.2.0** (ESP-IDF ≥ 5.4.0) fixes it. Earlier versions (arduino-esp32 2.x / ESP-IDF 4.x) are unreliable.
 >
-> **Required in platformio.ini:** `platform = espressif32@^6.3.0` or later (PlatformIO espressif32 6.x bundles arduino-esp32 3.x).
+> **Required in platformio.ini:** `platform = espressif32@^6.8.0` (minimum floor is 6.3.0 for the I2C fix; 6.8.0 is the canonical pinned value used in the build).
 >
 > **Do not use arduino-esp32 3.3.6+** — that version has a separate UART pin-assignment regression that breaks `Serial1.begin()` with custom GPIO pins (affects micro-ROS transport on GPIO 17/18). Pin to a known-good version — see build_plan.md Step 3.
 >

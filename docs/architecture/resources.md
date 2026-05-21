@@ -261,7 +261,7 @@ Repos:
 │                                                                     │
 │  ┌──────────────────── DISPLAY DAEMON ──────────────────────────┐   │
 │  │  display_daemon.py  (systemd, ROS2-independent)              │   │
-│  │  Reads /dev/ttyUSB1 (ESP32 telemetry)                        │   │
+│  │  Reads /dev/ttyACM0 (ESP32 Serial0 display telemetry)         │   │
 │  │  Reads psutil (CPU/RAM/disk/temp)                            │   │
 │  │  Writes SPI → SSD1309 OLED @ 2Hz                             │   │
 │  └──────────────────────────────────────────────────────────────┘   │
@@ -282,11 +282,11 @@ Repos:
 │  ┌──────────────────────────────────────────┐    │ Serial0         │
 │  │  microROS (Serial1 / UART)               │────┘ (telemetry)    │
 │  │  Publishes:                              │                      │
-│  │    /odom       ← encoder counts          │  ┌────────────────┐  │
-│  │    /imu        ← BNO055                  │  │ display_       │  │
-│  │    /battery    ← INA219                  │  │ telemetry      │  │
+│  │    /diff_cont/odom  ← encoder counts     │  ┌────────────────┐  │
+│  │    /imu/imu        ← BNO055             │  │ display_       │  │
+│  │    /battery_state  ← INA219             │  │ telemetry      │  │
 │  │  Subscribes:                             │  │ (Serial0)      │  │
-│  │    /cmd_vel    → TB6612 → motors         │  │ JSON @ 2Hz     │  │
+│  │    /diff_cont/cmd_vel_unstamped → motors │  │ JSON @ 2Hz     │  │
 │  └──────────────────────────────────────────┘  └────────────────┘  │
 │                                                                     │
 │  ┌──────────┐  I2C   ┌──────────┐                                  │
@@ -307,7 +307,7 @@ Repos:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      SENSORS (USB to Pi)                            │
 │                                                                     │
-│  RP Lidar ──USB──► /dev/ttyUSB0  →  rplidar_ros2  →  /scan        │
+│  RP Lidar ──USB──► /dev/rplidar  →  rplidar_ros2  →  /scan        │
 │  RealSense D435 ──USB──► realsense2_camera (RSUSB) →  /camera/*   │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -325,13 +325,13 @@ Repos:
 
 | Data | Source | Transport | Sink |
 |------|--------|-----------|------|
-| Wheel odometry | Encoders → ESP32-S3 | microROS USB serial | `/odom` → diff_drive_controller → Nav2 |
-| IMU | BNO055 → ESP32-S3 | microROS USB serial | `/imu` → robot_localization / Nav2 |
-| Battery | INA219 → ESP32-S3 | microROS USB serial | `/battery` → monitoring |
-| Battery (display) | INA219 → ESP32-S3 | JSON serial (separate USB port) | display_daemon → OLED |
-| Laser scan | RP Lidar | USB | `/scan` → slam_toolbox |
-| Depth / color | RealSense D435 (RSUSB) | USB | `/camera/*` → Nav2 costmap / OpenCV |
-| Motor commands | Nav2 | ROS2 topic | `/cmd_vel` → microROS → TB6612 → motors |
+| Wheel odometry | Encoders → ESP32-S3 | micro-ROS Serial1 → `/dev/ttyUSB0` | `/diff_cont/odom` → robot_localization EKF |
+| IMU | BNO055 → ESP32-S3 | micro-ROS Serial1 → `/dev/ttyUSB0` | `/imu/imu` → robot_localization EKF |
+| Battery | INA219 → ESP32-S3 | micro-ROS Serial1 → `/dev/ttyUSB0` | `/battery_state` → monitoring |
+| Battery (display) | INA219 → ESP32-S3 | JSON Serial0 → `/dev/ttyACM0` | display_daemon → OLED |
+| Laser scan | RP Lidar | USB → `/dev/rplidar` | `/scan` → slam_toolbox |
+| Depth / color | RealSense D435 (RSUSB) | USB 3.0 | `/camera/*` → Nav2 costmap |
+| Motor commands | Nav2 | ROS2 topic | `/diff_cont/cmd_vel_unstamped` → micro-ROS → TB6612 → motors |
 | Map | slam_toolbox | ROS2 topic | `/map` → Nav2 |
 | System stats | Pi 5 (psutil) | local | display_daemon → OLED |
 
@@ -349,7 +349,7 @@ Repos:
 
 ## What You Get (Display System)
 
-**`display_telemetry.ino` (ESP32-S3)** — Reads INA219 every 500ms over I2C (SDA=IO17, SCL=IO16) and streams compact JSON over USB CDC serial: `{"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}`. Uses the Adafruit INA219 library. Calibrated for 32V/2A by default — adjust in the sketch if your draw exceeds 2A.
+**`display_telemetry.ino` (ESP32-S3)** — Reads INA219 every 500ms over I2C (SDA=GPIO 8, SCL=GPIO 9) and streams compact JSON over USB CDC serial (Serial0 → `/dev/ttyACM0`): `{"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}`. Uses the Adafruit INA219 library. Calibrated for 32V/2A by default — adjust in the sketch if your draw exceeds 2A.
 
 **`display_daemon.py` (Pi)** — Standalone Python service. Reads the serial stream with auto-detection of the ESP32's USB port and automatic reconnection on disconnect. Collects CPU/RAM/disk/temp via psutil. Renders to the SSD1309 via luma.oled over SPI at 2Hz. Battery percentage is estimated from voltage (defaults to 3S LiPo 9.6V–12.6V range — edit to match your pack).
 
@@ -461,10 +461,10 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 | ESP32-S3 | TB6612 | Notes |
 |----------|--------|-------|
-| GPIO 10 (LEDC ch 0) | PWMA | Right motor speed, 1 kHz 8-bit PWM |
+| GPIO 10 (LEDC ch 0) | PWMA | Right motor speed, 20 kHz 8-bit PWM |
 | GPIO 11 | AIN1 | Right motor direction A |
 | GPIO 12 | AIN2 | Right motor direction B |
-| GPIO 13 (LEDC ch 1) | PWMB | Left motor speed, 1 kHz 8-bit PWM |
+| GPIO 13 (LEDC ch 1) | PWMB | Left motor speed, 20 kHz 8-bit PWM |
 | GPIO 14 | BIN1 | Left motor direction A |
 | GPIO 15 | BIN2 | Left motor direction B |
 | — | STBY | Not wired — Adafruit board has 10 kΩ pull-up (always HIGH) |
@@ -479,8 +479,8 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 | TB6612 | Motor |
 |--------|-------|
-| AO1, AO2 | Left motor |
-| BO1, BO2 | Right motor |
+| AO1, AO2 | Right motor (Motor A = RIGHT) |
+| BO1, BO2 | Left motor (Motor B = LEFT) |
 
 #### Motor Encoders → ESP32-S3
 
@@ -495,7 +495,7 @@ Measures whole-robot current (Pi + motors), not just partial. Full picture on th
 
 Wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder power, Yellow = Ch A, Green = Ch B.
 
-⚠️ GPIO 40/41 (left encoder) picks up TB6612 1 kHz PWM noise. Add 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the signal path. EMA filter (VEL_ALPHA = 0.2) in firmware also required.
+⚠️ GPIO 40/41 (left encoder) picks up TB6612 20 kHz PWM switching noise. Add 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the signal path. EMA filter (VEL_ALPHA = 0.2) in firmware also required (or use PCNT hardware encoder — see build_plan.md).
 
 #### Pi 5 → OLED Display (SPI)
 
@@ -513,7 +513,7 @@ Wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder power, Ye
 
 | Device | Pi 5 Port | Notes |
 |--------|----------|-------|
-| RP Lidar | USB-A port 3 | `/dev/ttyUSB0` |
+| RP Lidar | USB-A port 3 | `/dev/rplidar` (udev symlink) |
 | RealSense D435 | USB-A port 4 | RSUSB backend — use a USB 3.0 port (blue) |
 
 ### Key Improvements Over MyBot
