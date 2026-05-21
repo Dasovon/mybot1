@@ -894,7 +894,7 @@ The display must cycle through text, shapes, and a logo image.
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/local_setup.bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 ```
 
 For the full bench test, the ESP32 must be running Phase 1 firmware. If Phase 1 firmware isn't written yet, use the combined test sketch from Steps 4–8 and verify manually.
@@ -993,10 +993,19 @@ Working closed-loop motor control with encoder feedback, IMU + battery publishin
 **Step 1 — PlatformIO project**
 Create `firmware/esp32/platformio.ini` targeting `esp32-s3-devkitc-1`. Required build flags:
 ```
--DARDUINO_USB_CDC_ON_BOOT=1
--DMICRO_ROS_TRANSPORT_ARDUINO_SERIAL
+-DARDUINO_USB_CDC_ON_BOOT=1            ; enables Serial0 USB CDC for display telemetry
+-DMICRO_ROS_TRANSPORT_ARDUINO_SERIAL   ; micro-ROS uses Serial1 hardware UART
 ```
 Dependencies: `micro_ros_arduino`, `Adafruit BNO055`, `Adafruit INA219`, `Wire`.
+
+Serial assignment (must be set before any other Serial init):
+```cpp
+// Serial0 = native USB CDC (GPIO 19/20) → display telemetry JSON to Pi
+// Serial1 = UART (GPIO 17 TX, GPIO 18 RX) → micro-ROS to Pi via USB-UART adapter
+Serial.begin(115200);                              // Serial0: display telemetry
+Serial1.begin(115200, SERIAL_8N1, 18, 17);         // Serial1: micro-ROS
+set_microros_serial_transports(Serial1);
+```
 
 **Step 2 — Motor driver**
 Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
@@ -1029,7 +1038,7 @@ Implementation rule: create a `battery_task` pinned to **core 0** with its own `
 If no `/diff_cont/cmd_vel_unstamped` message is received within 500 ms, call `motors_stop()`. Watchdog must run independently of micro-ROS connection state — use a hardware timer or FreeRTOS timer, not a ROS callback.
 
 **Step 8 — micro-ROS node**
-Transport: USB serial (`Serial`, HWCDC). Publishers:
+Transport: Serial1 UART (GPIO 17 TX / GPIO 18 RX) via USB-UART adapter to Pi `/dev/ttyUSB0`. Publishers:
 - `/diff_cont/odom` — `nav_msgs/Odometry` at 30 Hz
 - `/imu/imu` — `sensor_msgs/Imu` at 30 Hz
 - `/battery_state` — `sensor_msgs/BatteryState` at 1 Hz
@@ -1303,7 +1312,8 @@ BME680 environmental data streaming, RealSense depth integrated into Nav2 as a v
 | `firmware/esp32/include/env_sensor.h` | BME680 interface |
 | `src/robot_msgs/msg/EnvData.msg` | Custom message for BME680 data |
 | `src/robot_bringup/config/nav2_params.yaml` | Enable voxel_layer with RealSense |
-| `scripts/oled_status.py` | Pi OLED status display script |
+| `scripts/display_daemon.py` | Pi OLED display daemon — ROS2-independent, reads Serial0 JSON |
+| `scripts/mybot-display.service` | systemd unit for display daemon |
 
 ### Step-by-step
 
@@ -1317,8 +1327,29 @@ Library: https://github.com/adafruit/Adafruit_BME680 — add `adafruit/Adafruit 
 **Step 2 — RealSense voxel layer**
 In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. Subscribe to `/camera/depth/points`. Tune height range to detect obstacles between 0.05 m and 1.5 m above floor.
 
-**Step 3 — OLED status display**
-Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md` and `docs/hardware/raspberry_pi_5.md`. Enable SPI via `raspi-config`. Create `scripts/oled_status.py` that reads `/battery_state` and topic rates, then renders a 128×64 status frame using Pillow and pushes it over SPI at ~1 Hz.
+**Step 3 — OLED display daemon**
+Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md`. Enable SPI via `raspi-config`.
+
+The display is driven by a **ROS2-independent systemd daemon** (`scripts/display_daemon.py`), not a ROS node. It reads battery telemetry directly from the ESP32 Serial0 USB CDC stream (`/dev/ttyACM0`) and system stats via `psutil`. This means the OLED works at boot, during ROS2 crashes, and during reflashing — not dependent on ROS2 being up.
+
+Display content (128×64):
+| Line | Content |
+|---|---|
+| 1 | IP address |
+| 2 | Battery voltage + current (from Serial0 JSON) |
+| 3 | Topic rates: `/diff_cont/odom`, `/scan` |
+| 4 | CPU % + RAM % |
+
+Files to create:
+- `scripts/display_daemon.py` — reads `/dev/ttyACM0` JSON, renders via luma.oled over SPI at 2 Hz
+- `scripts/mybot-display.service` — systemd unit, starts at boot, restarts on failure, runs as user `ryan`
+
+Install and enable:
+```bash
+sudo cp scripts/mybot-display.service /etc/systemd/system/
+sudo systemctl enable mybot-display.service
+sudo systemctl start mybot-display.service
+```
 
 Hardware reference: [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
 
@@ -1328,7 +1359,8 @@ Hardware reference: [`docs/hardware/oled_display.md`](../hardware/oled_display.m
 ros2 topic echo /env_data --once    # must show plausible temp/humidity/pressure
 ros2 topic hz /camera/depth/points  # still ~15 Hz
 # In RViz2: 3D obstacle visible in local costmap when object held in front of camera
-python3 scripts/oled_status.py      # OLED shows IP, battery, topic rates, CPU
+sudo systemctl status mybot-display.service   # must be active/running
+# OLED shows IP, battery voltage, topic rates, CPU — verify with ROS2 stopped too
 ```
 
 ---

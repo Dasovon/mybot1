@@ -34,7 +34,7 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 |---|---|---|---|
 | Power | RPI5 PD Power Hat P01 | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
-| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Native USB HWCDC → Pi `/dev/ttyACM0` | ESP32 |
+| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Serial1 UART (GPIO 17/18) → USB adapter → Pi `/dev/ttyUSB0` (micro-ROS) \| Serial0 USB CDC → Pi `/dev/ttyACM0` (display telemetry) | ESP32 |
 | Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
 | Motors + encoders | JGA25-371 DC 12V, 45:1 gear ratio | GPIO 39–42 (quadrature, 1010 CPR) | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
@@ -52,7 +52,8 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 Battery (9–24V DC, e.g. 3S LiPo ~12V)
     └── RPI5 PD Power Hat INPUT (DC barrel)
             ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
-            │       ├── Pi USB-A  →  ESP32-S3       (power + micro-ROS serial)
+            │       ├── Pi USB-A  →  ESP32-S3 Serial1 UART adapter  (micro-ROS, /dev/ttyUSB0)
+            │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)
             │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
             │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
             └── VIN screw terminal  →  TB6612FNG VM  (raw battery voltage, motor power)
@@ -75,7 +76,9 @@ Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one r
 | 13 | PWMB — Left motor speed (LEDC ch 1, 1 kHz, 8-bit) |
 | 14 | BIN1 — Left motor direction A |
 | 15 | BIN2 — Left motor direction B |
-| 19, 20 | Native USB D−/D+ — micro-ROS HWCDC transport to Pi |
+| 17 | UART1 TX — Serial1 micro-ROS transport to Pi (via USB-UART adapter) |
+| 18 | UART1 RX — Serial1 micro-ROS transport from Pi (via USB-UART adapter) |
+| 19, 20 | Native USB D−/D+ — Serial0 USB CDC → display telemetry JSON to Pi |
 | 39 | Right encoder B (read in ISR) |
 | 40 | Left encoder A — `attachInterrupt` CHANGE ⚠️ EMI |
 | 41 | Left encoder B (read in ISR) ⚠️ EMI |
@@ -86,7 +89,8 @@ STBY not wired — Adafruit breakout has onboard 10 kΩ pull-up (always enabled)
 
 ⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612 1 kHz PWM noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
 
-**Avoid:** GPIO 4,5,6,7 (not broken out), 19/20 (USB), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping pins).
+**Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping pins).
+GPIO 17/18 = Serial1 (micro-ROS). GPIO 19/20 = Serial0 USB CDC (display telemetry). Do not repurpose these.
 
 ---
 
@@ -102,22 +106,37 @@ Encoder wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder p
 
 ---
 
-## micro-ROS Transport (ESP32 ↔ Pi)
+## Serial Transport (ESP32 ↔ Pi) — Dual Port
 
-ESP32-S3 native USB HWCDC → USB cable → Pi `/dev/ttyACM0`
+The ESP32-S3 uses **two independent serial connections** to the Pi, on two separate USB ports:
 
-Stable by-id path: `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_58:E6:C5:5C:23:1C-if00`
+| Role | ESP32 | Adapter | Pi device | Purpose |
+|---|---|---|---|---|
+| micro-ROS | Serial1, GPIO 17 TX / 18 RX | USB-UART adapter (CP2102/CH340) | `/dev/ttyUSB0` | ROS topics: odom, IMU, battery, cmd_vel |
+| Display telemetry | Serial0, native USB CDC (GPIO 19/20) | USB cable (direct) | `/dev/ttyACM0` | INA219 JSON stream → display daemon |
 
-Required firmware build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`
+**Why two ports:** The display daemon is a plain Python systemd service — ROS2-independent, starts at boot, always on. It reads battery voltage directly from Serial0 regardless of whether the micro-ROS agent or ROS2 is running. Battery and system status are visible on the OLED during bringup, crashes, and reflashing.
 
-Wi-Fi used only for OTA flashing and TelnetStream debug monitoring — **not** for micro-ROS.
+**Firmware build flags:**
+```ini
+-DARDUINO_USB_CDC_ON_BOOT=1           ; enables Serial0 USB CDC for display telemetry
+-DMICRO_ROS_TRANSPORT_ARDUINO_SERIAL  ; micro-ROS uses hardware Serial1
+```
 
-Run agent on Pi:
+**Serial1 init in firmware:**
+```cpp
+Serial1.begin(115200, SERIAL_8N1, 18, 17);  // RX=GPIO18, TX=GPIO17
+set_microros_serial_transports(Serial1);
+```
+
+**Run micro-ROS agent on Pi:**
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/setup.bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 ```
+
+Wi-Fi used only for OTA flashing and TelnetStream debug monitoring — **not** for micro-ROS.
 
 ---
 
@@ -303,7 +322,8 @@ This folder holds all test and validation documentation. Do not put test scripts
 - Motor A = RIGHT wheel, Motor B = LEFT wheel — do not swap.
 
 ### micro-ROS
-- Transport is native USB HWCDC, not Wi-Fi. Build flag `-DARDUINO_USB_CDC_ON_BOOT=1` is required.
+- Transport is Serial1 UART (GPIO 17 TX / 18 RX) via USB-UART adapter to `/dev/ttyUSB0`. Not Wi-Fi, not native USB.
+- Serial0 (native USB CDC, GPIO 19/20) is reserved for display telemetry JSON — do not use it for micro-ROS.
 - Never change serial device, encoder pins, motor polarity, or controller YAML all at once during debugging. Change one thing, observe, repeat.
 - If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart robot-launch.service`.
 
@@ -370,8 +390,11 @@ The full step-by-step build plan — with files to create, implementation detail
 ls /dev/rplidar
 ls /dev/serial/by-id/usb-Espressif*
 
-# micro-ROS agent
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
+# micro-ROS agent (Serial1 UART via USB adapter)
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
+
+# Monitor display telemetry stream (Serial0 USB CDC)
+cat /dev/ttyACM0
 
 # Topic health
 ros2 topic hz /diff_cont/odom
