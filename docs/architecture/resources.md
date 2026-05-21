@@ -97,6 +97,35 @@ https://medium.com/@brianytsui/claude-code-as-embodied-agent-to-control-robots-8
 
 Great research reading but less immediately applicable — it uses privileged simulator state rather than real sensor data, is explicitly simulation-only with no real-world transfer demonstrated, and precision manipulation fails entirely. However, the ReAct loop methodology (reason → write code → execute → observe → iterate) is exactly how you'd want to use Claude Code when debugging your SLAM behaviors or tuning Nav2 parameters.
 
+**What it actually is:** FAEA (Frontier Agent for Embodied Actions) — Claude Code + Claude Opus as the model, writing Python against a robotics simulator API. Hobby project, nights and weekends.
+
+**Results (simulation only):**
+
+| Benchmark | Success Rate | Tasks |
+|-----------|--------------|-------|
+| LIBERO | 84.9% (88.2% with coaching) | 120 |
+| ManiSkill3 | 85.7% | 14 |
+| MetaWorld | 96.0% (100% with coaching) | 50 |
+
+Zero demonstrations. 2–26 attempts per task, 2–25 minutes, 18,473 tool calls across 419 tasks.
+
+**Why it doesn't transfer to mybot1 (or any real robot):**
+- Inputs are privileged simulator state (exact object positions) — no perception, no real sensors
+- Each decision cycle takes 2–8 seconds — incompatible with any ROS2 control loop
+- Peg insertion and plug charging: 0% success — sub-millimeter precision is out of reach
+- No sim-to-real transfer demonstrated; authors explicitly flag it as future work
+- Cost: $0.51–$5.60 per task — not viable at scale
+
+**What is applicable to mybot1:**
+The ReAct loop is the right mental model for using Claude Code as a debugging partner on real hardware:
+```
+Reason → write a diagnostic script / config change
+Execute → ros2 topic echo, colcon build, launch
+Observe → check topic rates, TF tree, costmap output
+Iterate → adjust PID gains, EKF config, Nav2 params, repeat
+```
+This is exactly how to work through SLAM drift, Nav2 costmap tuning, or encoder calibration — not as an autonomous agent, but as an interactive loop where you observe real sensor output between steps.
+
 #### Claude Code Ultimate Guide
 https://github.com/FlorianBruniaux/claude-code-ultimate-guide
 
