@@ -129,34 +129,96 @@ This is exactly how to work through SLAM drift, Nav2 costmap tuning, or encoder 
 #### Claude Code Ultimate Guide
 https://github.com/FlorianBruniaux/claude-code-ultimate-guide
 
-Covers CLAUDE.md setup, agent teams, MCP server integration, security hardening, and agentic workflows — practical for setting up Claude Code effectively on your dev machine for the MyBot workspace. Most directly useful for getting Claude Code configured well for your ROS2 development workflow rather than anything robotics-specific, but foundational.
+24K+ lines across 16 areas — the most comprehensive Claude Code reference available. Not robotics-specific but foundational for using Claude Code well on a complex multi-package project.
+
+**Most relevant sections for mybot1:**
+- **Agent teams**: Parallel worktree agents for cross-package refactoring — useful when reorganizing the ROS2 package structure or migrating node architectures across multiple packages simultaneously
+- **MCP vetting (5-phase workflow)**: Provenance check → code review → permission whitelist → Docker sandbox → ongoing monitoring. Apply this before adding any MCP server that touches robot hardware or sensor data
+- **Dangerous-actions hook**: 37 production hooks available; use the dangerous-actions variant to block `rm -rf`, force-push, and uncontrolled hardware commands in Claude sessions
+- **"Artifact paradox"**: Claude Code can generate 1.75× more logic errors than human code (ACM 2025). For robotics: mandatory review gates before any hardware deployment, not just CI
+
+**7-layer config map** (useful mental model for this project):
+
+| Layer | Use in mybot1 |
+|-------|--------------|
+| Commands (`.claude/commands/`) | `/build`, `/test`, `/ros2` — already set up |
+| Skills | Calibration routines, sensor validation sequences |
+| Agents (`.claude/agents/`) | `ros2-reviewer`, `hardware-checker` — already set up |
+| Hooks | Post-edit colcon build, pre-deploy safety checks |
+| MCP servers | Future: rosbag analysis, Nav2 sim interface |
+| CLAUDE.md | Already set up with full hardware constants and standards |
+| Memory | Auto-saved preferences per session |
 
 #### Claude Code Power User Tips
 https://support.claude.com/en/articles/14554000-claude-code-power-user-tips
 
-Official Anthropic tips for getting the most out of Claude Code — useful alongside the Ultimate Guide when setting up your dev workflow.
+Official Anthropic tips. Several are directly useful for mybot1 development:
+
+**High-value for this project:**
+- **`Shift+Tab`** — cycles through modes: default → acceptEdits → plan → auto. Use plan mode before any multi-file refactor across ROS2 packages
+- **`/batch`** — fans work to parallel worktree agents. Useful when updating hardware constants across all packages at once (e.g., if a topic name changes)
+- **`/permissions`** — pre-approve safe commands (`colcon build`, `ros2 topic hz`) to reduce prompts during debugging sessions
+- **`/loop`** — schedule recurring local tasks (up to 3 days). Could automate periodic `colcon test` runs
+- **Worktrees**: `claude --worktree my_feature` — isolated session per feature branch. Essential when testing firmware changes alongside ROS2 changes without cross-contamination
+- **CLAUDE.md compounding**: after each correction, append *"Update your CLAUDE.md so you don't make that mistake again."* Already being done; this is the right habit
+- **Verification principle**: *"Giving Claude a way to verify its work will markedly improve quality."* For ROS2: always append `&& colcon build && colcon test` to implementation requests
+
+**For multi-package work:**
+```bash
+claude --add-dir ~/bot_ws/src/esp32_serial_bridge --add-dir ~/bot_ws/src/robot_bringup
+```
+Add `"additionalDirectories"` to `settings.json` to make this persistent across sessions.
 
 #### Claude Code Robotics Engineer Agent
 https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/specialized-domains/robotics-engineer.md
 
-A pre-built Claude Code agent persona tuned for robotics engineering. Drop it into your `.claude/agents/` directory in `mybot_ws` to give Claude Code a robotics-aware default mindset when working on your packages.
+A robotics-specific agent persona spec. **Cannot be dropped in as-is** — it's a prose specification, not a Claude agent config file. Needs conversion before use.
+
+**What the persona enforces (worth borrowing):**
+- Separate nodes for sensor drivers, perception, state estimation, planning, and control — matches mybot1's package structure
+- tf2 tree must be a consistent tree with no loops, every frame has exactly one parent
+- RELIABLE QoS for commands, BEST_EFFORT for high-frequency sensor data — already in `.claude/rules/ros2_communication.md`
+- Control loops in dedicated threads with no dynamic memory allocation or blocking I/O
+- "A missed deadline is not performance degradation — it is a potential collision" — the right mindset for PID loop and watchdog code
+
+**Verdict:** The constraints are already encoded in `.claude/rules/robot_specific.md` and `hardware_constants.md`. No need to add this agent; the rules files cover it with mybot1-specific values rather than generic patterns.
 
 ---
 
-### Tier 3 — Less Relevant to Your Immediate Goals
+### Tier 3 — Reference / Background
 
-The following are useful reference material for ROS2 patterns and skills in general, but not specific to diff drive SLAM with your hardware stack. Worth bookmarking for when you're deep in package architecture or need Claude Code skill templates:
+#### ROS2 Engineering Skills
+https://github.com/dbwls99706/ros2-engineering-skills
 
+More substantial than its URL suggests — **20 production-grade reference modules, 13,000+ lines, 429 unit tests** verified on Humble/Jazzy/Rolling. Worth pulling into `.claude/skills/` when the project reaches Phase 4+.
+
+**Most relevant modules for mybot1:**
+- `navigation.md` — Nav2 costmap tuning, slam_toolbox, collision avoidance
+- `hardware-interface.md` — Motor controllers, encoder feedback via ros2_control
+- `communication.md` — QoS RxO semantics, silent message drop diagnosis (mismatched profiles)
+- `launch-system.md` — Composable bringup: hardware + TF broadcaster + SLAM + Nav2 in one launch
+- `testing.md` — launch_testing to verify sensor data flows before field trials
+
+**Included tooling:**
+- `qos_checker.py` — validates pub/sub QoS compatibility, catches silent drops before runtime
+- `launch_validator.py` — static AST analysis of Python launch files
+- `create_package.py` — scaffolds C++/Python packages with lifecycle patterns and gtest harness
+
+#### ROS 2 for Software Engineers
+https://medium.com/codex/explaining-ros-2-to-software-engineers-ecd7afdcc1d8
+
+Intro-level article framing ROS2 concepts via software engineering analogies: nodes as microservices, packages as modules, topics as pub-sub, services as synchronous RPC, actions as async long-running ops. No value if you already know ROS2. Useful to share with contributors who have a strong software background but no robotics experience.
+
+#### Skill marketplaces (low signal)
+The following were checked — most return 403 or contain only generic ROS2 boilerplate with no mybot1-specific value:
 - https://mcpmarket.com/tools/skills/ros-2-service-pattern
 - https://mcpmarket.com/tools/skills/ros-2-launch-system-manager
 - https://www.claudemarketplace.net/skills/ros2-launch-system
-- https://smithery.ai/skills/zeeshan080/ros2-patterns
+- https://smithery.ai/skills/zeeshan080/ros2-patterns (403)
 - https://skills.rest/skill/ros2-patterns
 - https://skills.rest/skill/ros2-skill
-- https://github.com/dbwls99706/ros2-engineering-skills
 - https://clawhub.ai/dbwls99706/ros2-engineering-skills
 - https://lobehub.com/nl/skills/lpigeon-ros-skill
-- https://medium.com/codex/explaining-ros-2-to-software-engineers-ecd7afdcc1d8
 
 ---
 
