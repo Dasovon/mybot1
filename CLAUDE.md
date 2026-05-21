@@ -303,6 +303,63 @@ This folder holds all test and validation documentation. Do not put test scripts
 
 ---
 
+## ROS 2 Development Standards
+
+These rules apply to every ROS 2 package written in this project. Based on [Henki ROS 2 Best Practices](https://github.com/henki-robotics/henki_ros2_best_practices).
+
+### Nodes
+- Each node has a single responsibility. Do not combine unrelated concerns in one node.
+- Separate application logic from ROS 2 communication. Put the core logic in a plain class or library; the ROS node only handles pub/sub/parameters. This makes the logic unit-testable without spinning up a ROS environment.
+
+### Launch Files
+- Use **XML** launch files (`.launch.xml`), not Python, unless Python is genuinely required for dynamic logic.
+- Never pass or hardcode node parameters in launch files. Use config YAML files and load them with `<param from="..."/>`.
+
+### Parameters
+- All node parameters live in YAML files under `src/<package>/config/`.
+- Never hardcode parameter values in node source code.
+- If a parameter must be changeable at runtime, implement a parameter callback (`add_on_set_parameters_callback`).
+
+### Logging
+- Use the ROS 2 logger (`RCLCPP_INFO`, `RCLCPP_WARN`, `RCLCPP_ERROR` / `self.get_logger()`) — never `print()` or `std::cout`.
+- Log levels: `INFO` = normal operation, `WARN` = unexpected but recoverable, `ERROR` = system no longer operating correctly.
+- **Never log inside high-frequency callbacks without throttling.** The IMU, odom, and encoder callbacks run at 30–100 Hz. Use `RCLCPP_INFO_THROTTLE` / `get_logger().throttled` to cap log rate at 1 Hz or less for any message inside these loops.
+
+### Message Interfaces
+- Reuse standard interfaces first: `geometry_msgs`, `sensor_msgs`, `nav_msgs`, `std_srvs`.
+- Custom message types go in `src/robot_msgs/` — already set up. Do not define custom messages inside other packages.
+- Do not use primitive `std_msgs` types (`Float32`, `Bool`, `String`) in production code — create a semantically named custom message instead.
+
+### Actions and Services
+- Services only for fast operations (<1 second): state requests, mode switches, parameter gets/sets.
+- Actions for anything that takes time, can fail in multiple ways, or needs cancellation (Nav2 goals, SLAM operations).
+- Use enum constants for action error codes, not freeform strings, so clients can parse them reliably.
+
+### Executors
+- Use `SingleThreadedExecutor` by default. It is deterministic, easier to test, and has lower overhead.
+- Only use `MultiThreadedExecutor` when a callback genuinely blocks and concurrent execution is required — not as a default.
+
+### Performance
+- Use C++ for any node with a high-frequency control loop or high-bandwidth data (encoders, motor control, point cloud processing).
+- Use Python for tooling, high-level orchestration, and the display daemon.
+- For the RealSense point cloud pipeline (Phase 6+): use **composable nodes** with intra-process communication to avoid copying large point cloud data over DDS.
+
+### Package Documentation
+Every package under `src/` must have a `README.md` covering:
+- What the package does (one paragraph)
+- How to launch it
+- All published and subscribed topics, with message types and rates
+- All services and actions
+- All parameters with type, description, and default value
+
+### Testing
+- Unit-test core application logic (the plain class, not the ROS node). Logic separated from ROS needs no ROS environment to test.
+- Integration-test ROS communication behavior (topic flow, parameter loading, launch files).
+- Target 90%+ coverage on core logic.
+- Never use `time.sleep()` or `rclcpp::sleep_for()` in tests to wait for messages. Use synchronization primitives or a timed spin with a proper timeout.
+
+---
+
 ## Critical Design Rules
 
 ### Safety
