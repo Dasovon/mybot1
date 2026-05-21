@@ -80,14 +80,14 @@ The `esp32_serial_bridge` node converts this to `sensor_msgs/Imu` on the `/imu/i
 
 ## robot_localization Fusion
 
-The `/imu` topic feeds `robot_localization` (EKF node) alongside `/odom` from encoders.
+The `/imu/imu` topic feeds `robot_localization` (EKF node) alongside `/diff_cont/odom` from encoders.
 
 Key parameters in `ekf.yaml`:
 
 ```yaml
 imu0: /imu/imu
 imu0_config: [false, false, false,
-              true,  true,  true,
+              false, false, false,
               false, false, false,
               true,  true,  true,
               true,  false, false]

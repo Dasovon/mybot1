@@ -71,7 +71,7 @@ Do not route motor power and logic power through the same wire or terminal.
 #### Decoupling capacitors — place as you add each component
 - **TB6612 VM/GND**: 100µF electrolytic + 100nF ceramic in parallel, close to the VM and GND pins.
 - **Each I2C sensor VCC**: 100nF ceramic close to the sensor's VCC pin.
-- **GPIO 40/41 (left encoder only)**: 100nF ceramic from each GPIO line to GND, placed on the breadboard as close to the ESP32 pin as possible. These GPIOs pick up 1 kHz motor PWM noise and caps are not optional.
+- **GPIO 40/41 (left encoder only)**: 100nF ceramic from each GPIO line to GND, placed on the breadboard as close to the ESP32 pin as possible. These GPIOs pick up 20 kHz motor PWM switching noise and caps are not optional.
 
 #### Cable routing
 - Motor power cables and signal cables (I2C, encoder, USB) must travel separately.
@@ -932,7 +932,7 @@ lsusb | grep Intel     # RealSense
 **14.2 — Launch all sensors:**
 ```bash
 # Terminal 1 — micro-ROS agent
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 
 # Terminal 2 — RPLidar
 ros2 run rplidar_ros rplidar_composition --ros-args -p serial_port:=/dev/rplidar -p frame_id:=laser
@@ -1174,7 +1174,7 @@ All three sensor streams (LiDAR, RealSense, IMU/odom from ESP32) active and fuse
 ### Step-by-step
 
 **Step 1 — micro-ROS agent bridge**
-`bridge.launch.py` must start `micro_ros_agent serial --dev /dev/ttyACM0`. Use the stable by-id path from CLAUDE.md as a fallback. The node should wait for the device to appear before launching.
+`bridge.launch.py` must start `micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200`. Use the stable by-id path from CLAUDE.md as a fallback. The node should wait for the device to appear before launching.
 
 **Step 2 — LiDAR driver**
 Launch `rplidar_ros` with device `/dev/rplidar`. Frame ID must be `laser`. Expected rate: ~5.5 Hz on `/scan`.

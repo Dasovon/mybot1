@@ -57,7 +57,7 @@ Every 200ms (5 Hz):
         Transmit: BAT <v> <i> <p>  (triggers ROS warning)
 
     if voltage < CUTOFF_THRESHOLD:
-        Immediately stop all motors (STBY pin LOW or zero PWM)
+        Immediately stop all motors (zero PWM on all channels)
         Transmit: ERR BATTERY_CUTOFF
 ```
 
@@ -73,7 +73,7 @@ Suggested thresholds (adjust for your battery chemistry):
 
 ## ROS Telemetry
 
-The ESP32 transmits at 1–5 Hz:
+The ESP32 publishes at 1 Hz:
 
 ```
 BAT <voltage> <current> <power>

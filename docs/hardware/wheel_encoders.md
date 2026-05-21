@@ -34,7 +34,7 @@ ISR direction logic: Left `A == B on CHANGE` → forward (+) | Right `A != B on 
 
 GPIO assignments: GPIO 40/41 = Left A/B | GPIO 42/39 = Right A/B. See `docs/hardware/esp32_s3.md`.
 
-> ⚠️ GPIO 40/41 pick up 1 kHz PWM noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` in firmware. Hardware fix: 100 nF ceramic caps on GPIO 40 and 41 to GND, placed close to the ESP32 pins.
+> ⚠️ GPIO 40/41 pick up 20 kHz PWM switching noise from the TB6612. EMA filter `VEL_ALPHA = 0.2` in firmware. Hardware fix: 100 nF ceramic caps on GPIO 40 and 41 to GND, placed close to the ESP32 pins.
 
 ## Motor Performance (25SG-370CA-45-EN, 12V 4W)
 
@@ -58,7 +58,7 @@ Max continuous current per motor: 750 mA. Two motors = 1.5A continuous from batt
 | `wheel_radius` | 0.034 m | Measured (68 mm dia; datasheet 65 mm) |
 | `wheel_separation` | 0.179 m | Measured center-to-center |
 
-> ⚠️ **Known EMI issue:** GPIO 40/41 (left encoder A/B) pick up 1 kHz PWM noise from the TB6612.
+> ⚠️ **Known EMI issue:** GPIO 40/41 (left encoder A/B) pick up 20 kHz PWM switching noise from the TB6612.
 > EMA filter (`VEL_ALPHA = 0.2`) mitigates it in firmware.
 > Hardware fix: route left encoder wires through a breadboard; place 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND on the breadboard before connecting to the ESP32.
 
@@ -93,7 +93,7 @@ The ESP32 publishes raw tick counts at 100 Hz:
 ENC <left_ticks> <right_ticks>
 ```
 
-The `esp32_serial_bridge` ROS node converts this to a `nav_msgs/Odometry` message on `/odom`.
+The `esp32_serial_bridge` ROS node converts this to a `nav_msgs/Odometry` message on `/diff_cont/odom`.
 
 ---
 

@@ -71,7 +71,7 @@ Never tune PID with open-loop PWM. Always use encoder feedback.
 
 ## 4 — EMI check (GPIO 40/41 left encoder)
 
-Left encoder picks up TB6612 1 kHz PWM noise. Verify hardware mitigation is working.
+Left encoder picks up TB6612 20 kHz PWM switching noise. Verify hardware mitigation is working.
 
 ```bash
 # Command robot to hold still (zero velocity)
