@@ -879,12 +879,13 @@ inside RViz.
 
 | Topic | Publisher | Consumer |
 |---|---|---|
-| /cmd_vel | Nav2 | serial bridge |
-| /odom | robot_localization | Nav2 |
+| /diff_cont/cmd_vel_unstamped | Nav2 | ESP32 via micro-ROS |
+| /diff_cont/odom | ESP32 via micro-ROS | robot_localization EKF |
+| /odom | robot_localization | Nav2, slam_toolbox |
 | /scan | RPLIDAR | slam_toolbox |
-| /camera/depth/points | RealSense | voxel layer |
-| /imu | ESP32 bridge | robot_localization |
-| /battery_state | ESP32 bridge | monitoring nodes |
+| /camera/depth/points | RealSense | Nav2 voxel layer |
+| /imu/imu | ESP32 via micro-ROS | robot_localization EKF |
+| /battery_state | ESP32 via micro-ROS | monitoring nodes |
 
 ---
 

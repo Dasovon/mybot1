@@ -91,7 +91,7 @@ ros2 bag record \
   /scan \
   /camera/depth/points \
   /camera/color/image_raw \
-  /imu \
+  /imu/imu \
   /odom \
   /battery_state \
   /tf \
