@@ -16,8 +16,8 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 
 | Phase | Status |
 |---|---|
-| 0 — Hardware & Environment | In progress |
-| 1 — ESP32 Firmware | Not started |
+| 0 — Hardware & Environment | In progress (Step 14 bench test pending) |
+| 1 — ESP32 Firmware | Firmware written — pending hardware validation |
 | 2 — ROS 2 Foundation (URDF + TF) | Not started |
 | 3 — Sensor Bridge & EKF | Not started |
 | 4 — SLAM | Not started |
