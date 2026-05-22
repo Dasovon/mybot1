@@ -1,0 +1,4 @@
+joint_state_publisher:
+  ros__parameters:
+    rate: 50
+    source_list: []
