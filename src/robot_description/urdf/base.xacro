@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Validated hardware values — do not change without updating CLAUDE.md -->
-  <xacro:property name="wheel_radius" value="0.034"/>
-  <xacro:property name="wheel_width"  value="0.025"/>
-  <xacro:property name="wheel_sep"    value="0.179"/>
-
   <!-- Chassis estimates — measure and replace before Phase 3 EKF bringup -->
-  <xacro:property name="chassis_l" value="0.200"/>
-  <xacro:property name="chassis_w" value="0.180"/>
-  <xacro:property name="chassis_h" value="0.100"/>
+  <xacro:property name="chassis_l" value="0.24"/>
+  <xacro:property name="chassis_w" value="0.203"/>
+  <xacro:property name="chassis_h" value="0.051"/>
+  
+  <!-- Validated hardware values — do not change without updating CLAUDE.md -->
+  <xacro:property name="wheel_radius" value="0.033"/>
+  <xacro:property name="wheel_width"  value="0.026"/>
+  <xacro:property name="wheel_sep"    value="0.177"/>
 
   <!-- Inertia helpers -->
   <xacro:macro name="box_inertia" params="m l w h">

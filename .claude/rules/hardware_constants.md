@@ -39,8 +39,8 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | Constant | Value |
 |---|---|
 | `ENC_CPR` | 1010 (2× quadrature, 45:1 gear ratio) |
-| `wheel_radius` | 0.034 m (measured; datasheet 0.0325 m) |
-| `wheel_separation` | 0.179 m (measured center-to-center) |
+| `wheel_radius` | 0.033 m (measured; datasheet 0.0325 m) |
+| `wheel_separation` | 0.177 m (measured center-to-center) |
 
 ## Motor specs (JGA25-371 / 25SG-370CA-45-EN)
 

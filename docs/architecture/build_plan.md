@@ -1040,7 +1040,7 @@ Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
 Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop()`.
 
 **Step 3 — Encoder ISR**
-Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.034 m`.
+Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.033 m`.
 
 Apply EMA filter on left encoder velocity (`VEL_ALPHA = 0.2`) to suppress GPIO 40/41 PWM noise.
 
@@ -1119,7 +1119,7 @@ A complete URDF describing the robot's physical geometry and sensor placement. T
 ### Step-by-step
 
 **Step 1 — Chassis and wheels**
-Define `base_link` as the robot body. Add `left_wheel` and `right_wheel` as continuous joints. Use measured values from CLAUDE.md: `wheel_radius = 0.034 m`, `wheel_separation = 0.179 m`.
+Define `base_link` as the robot body. Add `left_wheel` and `right_wheel` as continuous joints. Use measured values from CLAUDE.md: `wheel_radius = 0.033 m`, `wheel_separation = 0.177 m`.
 
 **Step 2 — Sensor frames**
 Define static frames relative to `base_link`:
@@ -1134,8 +1134,8 @@ Frame positions must match physical sensor placement on the robot. Measure and r
 Add the `ros2_control` diff drive controller configured for:
 - Left joint: `left_wheel`
 - Right joint: `right_wheel`
-- Wheel separation: 0.179 m
-- Wheel radius: 0.034 m
+- Wheel separation: 0.177 m
+- Wheel radius: 0.033 m
 - Command topic: `/diff_cont/cmd_vel_unstamped`
 - Odometry topic: `/diff_cont/odom`
 
