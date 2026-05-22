@@ -1,0 +1,184 @@
+#include <Arduino.h>
+#include "motors.h"
+#include "encoders.h"
+#include "pid.h"
+#include "imu.h"
+#include "battery.h"
+#include "microros.h"
+
+// ---------------------------------------------------------------------------
+// Robot physical constants (validated hardware values — do not change)
+// ---------------------------------------------------------------------------
+static constexpr float WHEEL_SEP   = 0.179f;   // m, center-to-center
+static constexpr float WHEEL_RAD   = 0.034f;   // m
+static constexpr float ENC_CPR_F   = 1010.0f;  // counts per wheel revolution
+static constexpr float TWO_PI_F    = 2.0f * (float)M_PI;
+
+// ---------------------------------------------------------------------------
+// Watchdog — motors stop if no cmd_vel received within this window
+// ---------------------------------------------------------------------------
+static constexpr uint32_t WATCHDOG_MS = 500;
+
+// ---------------------------------------------------------------------------
+// PID controllers — one per wheel, gains require on-hardware tuning
+// ---------------------------------------------------------------------------
+static PIDController pid_right(PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT, 0.01f);
+static PIDController pid_left (PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT, 0.01f);
+
+// ---------------------------------------------------------------------------
+// Odometry state
+// ---------------------------------------------------------------------------
+static float odom_x     = 0.0f;
+static float odom_y     = 0.0f;
+static float odom_theta = 0.0f;
+static float vel_linear = 0.0f;
+static float vel_angular= 0.0f;
+
+// ---------------------------------------------------------------------------
+// Encoder tracking
+// ---------------------------------------------------------------------------
+static long prev_ticks_r = 0;
+static long prev_ticks_l = 0;
+
+// ---------------------------------------------------------------------------
+// Loop timing
+// ---------------------------------------------------------------------------
+static uint32_t last_control_ms  = 0;  // 100 Hz
+static uint32_t last_pub_ms      = 0;  // 30 Hz  (odom + IMU)
+static uint32_t last_bat_pub_ms  = 0;  // 1 Hz   (battery)
+
+// ---------------------------------------------------------------------------
+// setup
+// ---------------------------------------------------------------------------
+void setup() {
+    // Serial0 (USB CDC, GPIO 19/20) — display telemetry JSON to Pi /dev/ttyACM0
+    Serial.begin(115200);
+
+    // I2C mutex — must be created before battery_task is started
+    g_i2c_mutex = xSemaphoreCreateMutex();
+
+    motors_init();
+    encoders_init();
+
+    // imu_init() calls Wire.begin(8, 9) — initialises shared I2C bus
+    if (!imu_init()) {
+        Serial.println("{\"err\":\"BNO055 init failed\"}");
+    }
+    // battery_init() assumes Wire is already up
+    if (!battery_init()) {
+        Serial.println("{\"err\":\"INA219 init failed\"}");
+    }
+
+    // Battery task on Core 0 — isolated from PID/micro-ROS on Core 1.
+    // Reads INA219 every 200 ms and enforces voltage cutoff independently.
+    xTaskCreatePinnedToCore(battery_task_fn, "battery", 4096, nullptr, 2, nullptr, 0);
+
+    // micro-ROS transport init (non-blocking; agent connection happens in spin())
+    microros_init();
+
+    uint32_t now = millis();
+    last_control_ms = now;
+    last_pub_ms     = now;
+    last_bat_pub_ms = now;
+
+    Serial.println("{\"info\":\"mybot1 boot ok\"}");
+}
+
+// ---------------------------------------------------------------------------
+// loop — runs on Core 1
+// ---------------------------------------------------------------------------
+void loop() {
+    uint32_t now = millis();
+
+    // -----------------------------------------------------------------------
+    // 100 Hz — PID + odometry integration
+    // -----------------------------------------------------------------------
+    if (now - last_control_ms >= 10) {
+        float dt = (now - last_control_ms) / 1000.0f;
+        last_control_ms = now;
+
+        if (now - microros_last_cmd_ms() > WATCHDOG_MS) {
+            // No command received in time — safe stop and reset integrators
+            motors_stop();
+            pid_right.reset();
+            pid_left.reset();
+            vel_linear  = 0.0f;
+            vel_angular = 0.0f;
+        } else {
+            long ticks_r = encoders_get_right();
+            long ticks_l = encoders_get_left();
+            long delta_r = ticks_r - prev_ticks_r;
+            long delta_l = ticks_l - prev_ticks_l;
+            prev_ticks_r = ticks_r;
+            prev_ticks_l = ticks_l;
+
+            // Measured wheel velocity (rad/s)
+            float meas_r = (float)delta_r / ENC_CPR_F * TWO_PI_F / dt;
+            float meas_l = (float)delta_l / ENC_CPR_F * TWO_PI_F / dt;
+
+            // Target from latest cmd_vel
+            float cmd_v = microros_cmd_linear();
+            float cmd_w = microros_cmd_angular();
+            float tgt_r = (cmd_v + cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
+            float tgt_l = (cmd_v - cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
+
+            // PID output in rad/s, mapped to [-1, 1] duty for motors
+            float out_r = pid_right.compute(tgt_r, meas_r);
+            float out_l = pid_left.compute(tgt_l, meas_l);
+            motors_set_duty(out_r / MOTOR_MAX_RAD_S, out_l / MOTOR_MAX_RAD_S);
+
+            // Odometry integration (mid-point rule)
+            float d_r  = (float)delta_r / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
+            float d_l  = (float)delta_l / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
+            float d_c  = (d_r + d_l) / 2.0f;
+            float d_th = (d_r - d_l) / WHEEL_SEP;
+            odom_x     += d_c * cosf(odom_theta + d_th / 2.0f);
+            odom_y     += d_c * sinf(odom_theta + d_th / 2.0f);
+            odom_theta += d_th;
+            vel_linear  = d_c / dt;
+            vel_angular = d_th / dt;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 30 Hz — odom + IMU publish
+    // -----------------------------------------------------------------------
+    if (now - last_pub_ms >= 33) {
+        last_pub_ms = now;
+
+        microros_publish_odom(odom_x, odom_y, odom_theta, vel_linear, vel_angular);
+
+        // IMU read — take I2C mutex to coordinate with battery_task on Core 0
+        if (g_i2c_mutex && xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(10))) {
+            float ax, ay, az, gx, gy, gz;
+            if (imu_read(&ax, &ay, &az, &gx, &gy, &gz)) {
+                xSemaphoreGive(g_i2c_mutex);
+                microros_publish_imu(ax, ay, az, gx, gy, gz);
+            } else {
+                xSemaphoreGive(g_i2c_mutex);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 1 Hz — battery publish + display telemetry JSON on Serial0
+    // -----------------------------------------------------------------------
+    if (now - last_bat_pub_ms >= 1000) {
+        last_bat_pub_ms = now;
+
+        microros_publish_battery(g_battery.voltage_v, g_battery.current_ma);
+
+        // JSON to Serial0 for display daemon (format matches display_daemon.py expectation)
+        Serial.printf("{\"v\":%.2f,\"i\":%.3f,\"p\":%.2f,\"ok\":%d,\"ts\":%lu}\n",
+                      (double)g_battery.voltage_v,
+                      (double)(g_battery.current_ma / 1000.0f),
+                      (double)(g_battery.power_mw   / 1000.0f),
+                      (int)g_battery.ok,
+                      (unsigned long)now);
+    }
+
+    // -----------------------------------------------------------------------
+    // micro-ROS state machine + executor spin (every iteration)
+    // -----------------------------------------------------------------------
+    microros_spin();
+}
