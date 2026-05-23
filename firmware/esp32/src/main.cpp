@@ -10,7 +10,7 @@
 // Robot physical constants (validated hardware values — do not change)
 // ---------------------------------------------------------------------------
 static constexpr float WHEEL_SEP   = 0.177f;   // m, center-to-center
-static constexpr float WHEEL_RAD   = 0.033f;   // m
+static constexpr float WHEEL_RAD   = 0.03414f; // m (measured: 68.27mm dia)
 static constexpr float ENC_CPR_F   = 1010.0f;  // counts per wheel revolution
 static constexpr float TWO_PI_F    = 2.0f * (float)M_PI;
 

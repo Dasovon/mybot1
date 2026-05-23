@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Validated hardware values — do not change without updating CLAUDE.md -->
-  <xacro:property name="wheel_radius" value="0.033"/>
+  <xacro:property name="wheel_radius" value="0.03414"/>
   <xacro:property name="wheel_width"  value="0.026"/>
   <xacro:property name="wheel_sep"    value="0.177"/>
 

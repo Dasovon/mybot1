@@ -99,7 +99,7 @@ GPIO 17/18 = Serial1 (micro-ROS). GPIO 19/20 = Serial0 USB CDC (display telemetr
 | Parameter | Value | Notes |
 |---|---|---|
 | `ENC_CPR` | 1010 | 2× quadrature, 45:1 gear ratio — validated on floor |
-| `wheel_radius` | 0.033 m | Measured (66 mm dia; datasheet says 65 mm) |
+| `wheel_radius` | 0.03414 m | Measured (68.27 mm dia) |
 | `wheel_separation` | 0.177 m | Measured center-to-center |
 
 Encoder wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder power, Yellow = Ch A, Green = Ch B.
