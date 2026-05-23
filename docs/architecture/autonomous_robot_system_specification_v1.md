@@ -510,8 +510,8 @@ AI
 ## Operating System
 
 ```text
-Ubuntu 22.04 LTS
-ROS 2 Humble
+Ubuntu 24.04 LTS (dev PC) / Raspberry Pi OS Trixie (Pi)
+ROS 2 Jazzy
 ```
 
 ---

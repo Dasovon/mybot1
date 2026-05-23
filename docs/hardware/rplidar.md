@@ -49,7 +49,7 @@ Reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 Package: `rplidar_ros`
 
 ```bash
-sudo apt install ros-humble-rplidar-ros
+sudo apt install ros-jazzy-rplidar-ros
 ```
 
 Published topic: `/scan` (`sensor_msgs/LaserScan`)

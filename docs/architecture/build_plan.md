@@ -118,38 +118,50 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
-**2.1 — Flash Ubuntu 22.04 LTS**
+**2.1 — Flash Raspberry Pi OS Lite (64-bit)**
 
-> ⚠️ **Must use Ubuntu 22.04 LTS (64-bit) — not Raspberry Pi OS.** ROS 2 Humble binary packages are only published for Ubuntu 22.04 arm64. Raspberry Pi OS (Bookworm/Debian 12) requires compiling ROS2 from source.
+> OS: **Raspberry Pi OS Lite (64-bit)** — Ubuntu Server had repeated cloud-init provisioning failures on the Pi 5. Raspberry Pi OS Lite (Debian Trixie) is dramatically more reliable. ROS 2 Jazzy packages are installed using the Debian Bookworm repo (binary compatible with Trixie).
 
 Download and install Raspberry Pi Imager on your dev PC:
 https://www.raspberrypi.com/software/
 
 In the Imager:
 1. Choose device: **Raspberry Pi 5**
-2. Choose OS: **Other general-purpose OS → Ubuntu → Ubuntu Server 22.04 LTS (64-bit)**
+2. Choose OS: **Raspberry Pi OS Lite (64-bit)**
 3. Choose storage: your microSD card (≥32GB recommended)
 4. Click the gear icon (⚙) before writing and configure:
-   - Set hostname (e.g. `mybot`)
+   - Set hostname: `pi5bot`
    - Enable SSH
-   - Set username and password
+   - Set username: `bot` / password of your choice
    - Configure Wi-Fi (your network SSID + password)
+   - Set locale / timezone
 5. Write the image
+
+After flashing, before first boot (belt-and-suspenders SSH enable):
+```bash
+touch /media/ryan/bootfs/ssh
+```
 
 **2.2 — First boot and SSH**
 
-Insert the SD card into the Pi. Connect power. Wait ~60 seconds for first boot.
+Insert the SD card into the Pi. Connect Ethernet. Power on. Wait ~60 seconds for first boot.
 
-Find the Pi's IP address (check your router, or use):
+Clear any stale host key from previous flashes:
 ```bash
-ping mybot.local       # if mDNS works on your network
-# or
-nmap -sn 192.168.1.0/24 | grep -i raspberry
+ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "pi5bot.local"
 ```
 
 Connect over SSH:
 ```bash
-ssh ryan@mybot.local
+ssh bot@pi5bot.local
+```
+
+First-boot fixes:
+```bash
+sudo dpkg-reconfigure locales                     # enable en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+sudo raspi-config                                 # Localisation → WLAN Country → US
+sudo nmtui                                        # configure WiFi if needed
 ```
 
 **2.3 — Update the system**
@@ -173,28 +185,32 @@ After reboot verify no undervoltage events:
 vcgencmd get_throttled   # must return 0x0
 ```
 
-**2.4 — Install ROS 2 Humble on Pi**
+**2.4 — Install ROS 2 Jazzy on Pi**
 
 Install base only — the Pi does not need RViz2.
 
+> Raspberry Pi OS Trixie (Debian 13) is not officially supported by Jazzy, but binary packages from the Jazzy/Bookworm (Debian 12) repo are compatible. The `bookworm` codename is used explicitly below.
+
 ```bash
-# Locale
+# Locale (may already be set from first boot)
 sudo locale-gen en_US en_US.UTF-8
 sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 export LANG=en_US.UTF-8
 
-# Add ROS 2 apt repo
+# Add ROS 2 GPG key
 sudo apt install software-properties-common curl -y
 sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
   -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# Use 'bookworm' explicitly — Trixie uses Bookworm-compatible Jazzy packages
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-  http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+  http://packages.ros.org/ros2/ubuntu bookworm main" \
   | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
-sudo apt update && sudo apt install ros-humble-ros-base -y
+sudo apt update && sudo apt install ros-jazzy-ros-base -y
 sudo apt install python3-rosdep python3-colcon-common-extensions -y
 
-echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 
 sudo rosdep init
@@ -206,10 +222,10 @@ rosdep update
 Not available as an apt package for arm64. Build from source in `~/microros_ws`:
 
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 mkdir -p ~/microros_ws/src && cd ~/microros_ws
 
-git clone -b humble https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+git clone -b jazzy https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
 
 rosdep update
 rosdep install --from-paths src --ignore-src -y
@@ -236,14 +252,14 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 - [ ] Pi boots cleanly — no kernel panics, no rainbow square (undervoltage icon)
 - [ ] `get_throttled` returns `0x0`
 - [ ] SSH accessible over local network
-- [ ] ROS 2 Humble installed: `ros2 --version` returns without error
+- [ ] ROS 2 Jazzy installed: `ros2 --version` returns without error
 - [ ] micro-ROS agent built: `ros2 run micro_ros_agent micro_ros_agent --help` works
 - [ ] USB-A ports functional
 
 **Common failures:**
 - Undervoltage: cable resistance too high — use a short, high-quality USB-C cable rated for 5A.
 - No boot: check SD card seated, valid OS image.
-- ROS 2 install fails: Pi must be running Raspberry Pi OS Bookworm (Debian 12) or Ubuntu 22.04.
+- ROS 2 install fails: verify apt sources list uses `bookworm` codename; Trixie is not listed at packages.ros.org but bookworm packages are compatible.
 
 ---
 
@@ -743,7 +759,7 @@ void loop() {
 
 **11.1 — Install rplidar ROS 2 package on Pi:**
 ```bash
-sudo apt install ros-humble-rplidar-ros -y
+sudo apt install ros-jazzy-rplidar-ros -y
 ```
 
 **11.2 — Set up udev rule:**
@@ -761,7 +777,7 @@ Unplug and replug the LiDAR — `/dev/rplidar` should appear.
 
 **11.3 — Test launch:**
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 ros2 run rplidar_ros rplidar_composition --ros-args \
     -p serial_port:=/dev/rplidar \
     -p frame_id:=laser \
@@ -776,7 +792,7 @@ ros2 topic echo /scan --once | head -20
 
 **Optional — Visualize in RViz2 on dev PC:**
 ```bash
-sudo apt install ros-humble-desktop -y
+sudo apt install ros-jazzy-desktop -y
 rviz2
 # Add → By topic → /scan → LaserScan
 ```
@@ -816,12 +832,12 @@ rs-enumerate-devices   # should list D435 serial number and firmware version
 
 **12.2 — Install realsense2_camera ROS package:**
 ```bash
-sudo apt install ros-humble-realsense2-camera ros-humble-realsense2-description -y
+sudo apt install ros-jazzy-realsense2-camera ros-jazzy-realsense2-description -y
 ```
 
 **12.3 — Test launch:**
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 ros2 launch realsense2_camera rs_launch.py \
     depth_width:=640 depth_height:=480 depth_fps:=15 \
     color_width:=640 color_height:=480 color_fps:=15 \
@@ -915,7 +931,7 @@ The display must cycle through text, shapes, and a logo image.
 
 **Prerequisite — start micro-ROS agent on Pi** (built in Step 2):
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/microros_ws/install/local_setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 ```

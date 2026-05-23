@@ -43,7 +43,7 @@ The RealSense D435 provides RGB-D (color + depth) data used for:
 Package: `realsense2_camera`
 
 ```bash
-sudo apt install ros-humble-realsense2-camera
+sudo apt install ros-jazzy-realsense2-camera
 ```
 
 Key published topics:

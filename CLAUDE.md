@@ -8,7 +8,7 @@ Hardware docs live in `docs/hardware/`. The quick-reference GPIO map is in `docs
 
 ## Project Overview
 
-A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone build from scratch. Capable of autonomous mapping, SLAM, navigation, obstacle avoidance, multi-sensor fusion, semantic perception, and environmental monitoring. Architecture mirrors a commercial AMR, not a hobby robot.
+A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone build from scratch. Capable of autonomous mapping, SLAM, navigation, obstacle avoidance, multi-sensor fusion, semantic perception, and environmental monitoring. Architecture mirrors a commercial AMR, not a hobby robot.
 
 > **For AI assistants:** This is a standalone project. Do not reference, import patterns from, or compare against any other robot project. All wiring and pinout data in `docs/hardware/` is correct for this build.
 
@@ -140,7 +140,7 @@ set_microros_serial_transports(Serial1);
 
 **Run micro-ROS agent on Pi:**
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/microros_ws/install/setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 ```
@@ -424,14 +424,15 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - **Dev PC failure must never cause a dangerous robot.**
 
 ### Electrical
-- All subsystems share one common ground: Battery −, ESP32, Pi, TB6612, encoders, sensors.
+- All subsystems share one common ground: Battery −, ESP32, Pi, MDD10A, encoders, sensors.
 - Missing common ground causes serial errors, PWM noise, encoder EMI, and motor glitches.
-- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND — TB6612 1 kHz PWM couples into these lines. Use a breadboard with caps in the encoder signal path.
+- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND — MDD10A 20 kHz PWM couples into these lines. Use a breadboard with caps in the encoder signal path.
 
 ### Motion Control
 - Closed-loop PID velocity control only (encoder feedback → wheel velocity target in rad/s).
 - Never use open-loop PWM for normal operation.
-- Motor A = RIGHT wheel, Motor B = LEFT wheel — do not swap.
+- Right side (Ch1) = front_right + rear_right in parallel. Left side (Ch2) = front_left + rear_left in parallel.
+- **Nav2 Jazzy breaking change:** Nav2 Jazzy defaults to `geometry_msgs/TwistStamped` on `cmd_vel`. Set `enable_stamped_cmd_vel: false` in the Nav2 `controller_server` config to keep `geometry_msgs/Twist` on `/diff_cont/cmd_vel_unstamped`. The ESP32 firmware uses Twist — do not change this without updating the micro-ROS subscriber type.
 
 ### micro-ROS
 - Transport is Serial1 UART (GPIO 17 TX / 18 RX) via USB-UART adapter to `/dev/ttyUSB0`. Not Wi-Fi, not native USB.
@@ -545,9 +546,10 @@ The robot is considered minimally operational when it can:
 | Item | Value |
 |---|---|
 | OS (Pi) | Raspberry Pi OS Lite 64-bit (Debian 13 Trixie) — hostname: `pi5bot`, user: `bot` |
-| ROS | ROS 2 Humble Hawksbill |
+| OS (dev PC) | Ubuntu 24.04 LTS — required for ROS 2 Jazzy binary packages |
+| ROS | ROS 2 Jazzy Jalisco |
 | Pi | Raspberry Pi 5 |
 | ESP32 firmware | PlatformIO + Arduino framework — `firmware/esp32/` |
-| micro-ROS agent | Built from source in `~/microros_ws` (not in apt for arm64) |
-| Python | 3.10+ for ROS nodes |
+| micro-ROS agent | Built from source in `~/microros_ws` (jazzy branch) |
+| Python | 3.12+ for ROS nodes |
 | Dev PC GPU | NVIDIA RTX preferred for YOLO / point cloud processing |

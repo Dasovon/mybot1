@@ -15,7 +15,7 @@ The development PC is the "brain" of the robot. It runs all computationally inte
 | GPU | Any NVIDIA (for CUDA) | NVIDIA RTX series |
 | Storage | 256 GB SSD | 1 TB NVMe SSD |
 | Networking | Wi-Fi | Gigabit Ethernet (preferred for ROS DDS) |
-| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
 
 ---
 
@@ -24,12 +24,12 @@ The development PC is the "brain" of the robot. It runs all computationally inte
 | Software | Version | Purpose |
 |---|---|---|
 | Ubuntu | 22.04 LTS | Operating system |
-| ROS 2 | Humble Hawksbill | Robot middleware |
-| slam_toolbox | Latest Humble | 2D SLAM |
-| RTAB-Map | Latest Humble | Future: RGB-D SLAM |
-| Nav2 | Latest Humble | Autonomous navigation |
-| RViz2 | With Humble | Visualization |
-| robot_localization | Latest Humble | EKF sensor fusion |
+| ROS 2 | Jazzy Hawksbill | Robot middleware |
+| slam_toolbox | Latest Jazzy | 2D SLAM |
+| RTAB-Map | Latest Jazzy | Future: RGB-D SLAM |
+| Nav2 | Latest Jazzy | Autonomous navigation |
+| RViz2 | With Jazzy | Visualization |
+| robot_localization | Latest Jazzy | EKF sensor fusion |
 | YOLO (Ultralytics) | v8+ | Future: semantic perception |
 | CUDA | 11.8+ / 12.x | GPU acceleration for AI |
 

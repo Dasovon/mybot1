@@ -104,19 +104,11 @@ Use an NVMe SSD via the Pi 5 PCIe M.2 HAT for rosbag recording. microSD cards ar
 
 Ubuntu Server was abandoned after repeated cloud-init provisioning failures (missing SSH host keys, user accounts not created, hostname not applying, mDNS failures). Raspberry Pi OS Lite is dramatically more reliable for initial bring-up. See bringup notes in `docs/hardware/` for full details.
 
-### ⚠️ ROS 2 compatibility — decision required before Phase 3
+### ROS 2 Jazzy on Raspberry Pi OS Trixie
 
-ROS 2 **Humble** binary packages (`ros-humble-*`) are published for Ubuntu 22.04 only. Raspberry Pi OS Trixie (Debian 13) is not officially supported.
+ROS 2 Jazzy targets Ubuntu 24.04 (Tier 1) and Debian Bookworm (Tier 3). Raspberry Pi OS Trixie (Debian 13) is not officially listed, but Bookworm binary packages are compatible. Use `bookworm` as the apt codename explicitly — see build plan Step 2.4 for the full install procedure.
 
-Options — choose one before starting ROS 2 install on the Pi:
-
-| Option | Effort | Notes |
-|---|---|---|
-| **Docker** (Ubuntu 22.04 + Humble inside container) | Medium | Cleanest isolation; dev PC stays on Humble |
-| **ROS 2 Jazzy from source** (Debian Bookworm/Trixie compat) | High | Jazzy is closest but still not Trixie-native |
-| **Humble from source** on Trixie | High | Long build, complex deps |
-
-The dev PC runs Ubuntu 22.04 / Humble — the Pi ROS 2 version must match for cross-machine topic communication.
+The dev PC must run Ubuntu 24.04 + ROS 2 Jazzy to match the Pi for cross-machine topic communication.
 
 ## Setup Notes
 

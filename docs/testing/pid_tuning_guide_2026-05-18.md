@@ -74,11 +74,11 @@ Before tuning can begin, the ESP32 firmware must:
 | numpy | Signal analysis | `pip install numpy` |
 | pandas | Data logging | `pip install pandas` |
 | pyserial | Serial communication | `pip install pyserial` |
-| rclpy | ROS 2 Python client | Included with ROS 2 Humble |
+| rclpy | ROS 2 Python client | Included with ROS 2 Jazzy |
 
 ### On Raspberry Pi
 
-- ROS 2 Humble (installed in Gate 2 of electronics protocol)
+- ROS 2 Jazzy (installed in Gate 2 of electronics protocol)
 - micro-ROS agent running (see Gate 13)
 
 ### Serial monitor (for manual tuning without automation)
@@ -504,7 +504,7 @@ Acceptable return error at this stage: < 15 cm and < 15°.
 
 **Step 9.1 — Command via ROS topic**
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 
 # Single velocity step command:
 ros2 topic pub /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
