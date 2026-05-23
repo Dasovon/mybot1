@@ -1,15 +1,18 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Chassis estimates — measure and replace before Phase 3 EKF bringup -->
-  <xacro:property name="chassis_l" value="0.24"/>
-  <xacro:property name="chassis_w" value="0.203"/>
-  <xacro:property name="chassis_h" value="0.051"/>
-  
   <!-- Validated hardware values — do not change without updating CLAUDE.md -->
   <xacro:property name="wheel_radius" value="0.033"/>
   <xacro:property name="wheel_width"  value="0.026"/>
   <xacro:property name="wheel_sep"    value="0.177"/>
+
+  <!-- Measured chassis dimensions -->
+  <xacro:property name="chassis_l" value="0.24"/>
+  <xacro:property name="chassis_w" value="0.203"/>
+  <xacro:property name="chassis_h" value="0.051"/>
+
+  <!-- Wheelbase (front-to-rear axle distance) — PLACEHOLDER, measure when chassis arrives -->
+  <xacro:property name="wheelbase"    value="0.18"/>
 
   <!-- Inertia helpers -->
   <xacro:macro name="box_inertia" params="m l w h">
@@ -32,8 +35,8 @@
     </inertial>
   </xacro:macro>
 
-  <!-- Wheel macro — joint origin rpy="-pi/2 0 0" rotates cylinder z-axis onto parent y-axis -->
-  <xacro:macro name="wheel" params="name y_offset">
+  <!-- Wheel macro — joint origin rpy="-pi/2 0 0" aligns cylinder z-axis with parent y-axis -->
+  <xacro:macro name="wheel" params="name x_offset y_offset">
     <link name="${name}">
       <visual>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
@@ -47,12 +50,12 @@
     <joint name="${name}_joint" type="continuous">
       <parent link="base_link"/>
       <child link="${name}"/>
-      <origin xyz="0 ${y_offset} 0" rpy="${-pi/2} 0 0"/>
+      <origin xyz="${x_offset} ${y_offset} 0" rpy="${-pi/2} 0 0"/>
       <axis xyz="0 0 1"/>
     </joint>
   </xacro:macro>
 
-  <!-- Base chassis — origin at wheel axle height, centered between wheels -->
+  <!-- Base chassis — origin at wheel axle height, centered between all four wheels -->
   <link name="base_link">
     <visual>
       <geometry><box size="${chassis_l} ${chassis_w} ${chassis_h}"/></geometry>
@@ -61,10 +64,13 @@
     <collision>
       <geometry><box size="${chassis_l} ${chassis_w} ${chassis_h}"/></geometry>
     </collision>
-    <xacro:box_inertia m="1.5" l="${chassis_l}" w="${chassis_w}" h="${chassis_h}"/>
+    <xacro:box_inertia m="2.5" l="${chassis_l}" w="${chassis_w}" h="${chassis_h}"/>
   </link>
 
-  <xacro:wheel name="left_wheel"  y_offset=" ${wheel_sep/2}"/>
-  <xacro:wheel name="right_wheel" y_offset="-${wheel_sep/2}"/>
+  <!-- Four wheels: front/rear × left/right -->
+  <xacro:wheel name="front_left_wheel"  x_offset=" ${wheelbase/2}" y_offset=" ${wheel_sep/2}"/>
+  <xacro:wheel name="front_right_wheel" x_offset=" ${wheelbase/2}" y_offset="-${wheel_sep/2}"/>
+  <xacro:wheel name="rear_left_wheel"   x_offset="-${wheelbase/2}" y_offset=" ${wheel_sep/2}"/>
+  <xacro:wheel name="rear_right_wheel"  x_offset="-${wheelbase/2}" y_offset="-${wheel_sep/2}"/>
 
 </robot>

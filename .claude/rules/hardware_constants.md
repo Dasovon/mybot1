@@ -8,12 +8,12 @@
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWMA — Right motor speed (LEDC ch 0, 20 kHz, 8-bit) |
-| 11 | AIN1 — Right motor direction A |
-| 12 | AIN2 — Right motor direction B |
-| 13 | PWMB — Left motor speed (LEDC ch 1, 20 kHz, 8-bit) |
-| 14 | BIN1 — Left motor direction A |
-| 15 | BIN2 — Left motor direction B |
+| 10 | PWM_R — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → Cytron MDD10A Ch1 |
+| 11 | DIR_R — Right side direction → Cytron MDD10A Ch1 |
+| 12 | PWM_L — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → Cytron MDD10A Ch2 |
+| 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
+| 14 | (free) |
+| 15 | (free) |
 | 17 | UART1 TX → USB-UART adapter → Pi `/dev/ttyUSB0` (micro-ROS Serial1) |
 | 18 | UART1 RX ← USB-UART adapter ← Pi `/dev/ttyUSB0` (micro-ROS Serial1) |
 | 19, 20 | Native USB D−/D+ — Serial0 display telemetry CDC to Pi `/dev/ttyACM0` |
@@ -22,7 +22,7 @@
 | 41 | Left encoder B ⚠️ EMI — 100 nF cap to GND required |
 | 42 | Right encoder A |
 
-**Motor A = RIGHT, Motor B = LEFT.**
+**Right side (Ch1) = front_right + rear_right motors in parallel. Left side (Ch2) = front_left + rear_left motors in parallel.**
 
 GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping).
 
@@ -80,8 +80,10 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | `imu_link` | BNO055 |
 | `camera_link` | RealSense D435 |
 | `camera_depth_frame` | RealSense depth frame |
-| `left_wheel` | Left drive wheel |
-| `right_wheel` | Right drive wheel |
+| `front_left_wheel` | Front left drive wheel |
+| `front_right_wheel` | Front right drive wheel |
+| `rear_left_wheel` | Rear left drive wheel |
+| `rear_right_wheel` | Rear right drive wheel |
 
 ## micro-ROS stable device path
 

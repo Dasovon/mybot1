@@ -35,8 +35,8 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 | Power | EP-0225 (52pi) | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
 | Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Serial1 UART (GPIO 17/18) → USB adapter → Pi `/dev/ttyUSB0` (micro-ROS) \| Serial0 USB CDC → Pi `/dev/ttyACM0` (display telemetry) | ESP32 |
-| Motor driver | Adafruit TB6612FNG breakout | GPIO 10–15 (PWM + direction) | ESP32 |
-| Motors + encoders | JGA25-371 DC 12V, 45:1 gear ratio | GPIO 39–42 (quadrature, 1010 CPR) | ESP32 |
+| Motor driver | Cytron MDD10A (dual channel 10A) | GPIO 10–13 (PWM + DIR) — **not yet wired** | ESP32 |
+| Motors + encoders | 4× JGA25-371 DC 12V, 45:1 gear ratio (skid steer, 2 per side) | GPIO 39–42 (quadrature, 1010 CPR, one encoder per side) — **not yet wired** | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
 | Battery monitor | Adafruit INA219 breakout | I2C GPIO 8/9, addr 0x40 | ESP32 |
 | Env sensor | BME680 breakout | I2C GPIO 8/9, addr 0x76 — **not yet wired** | ESP32 |
@@ -56,10 +56,10 @@ Battery (9–24V DC, e.g. 3S LiPo ~12V)
             │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)
             │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
             │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
-            └── VIN screw terminal  →  TB6612FNG VM  (raw battery voltage, motor power)
+            └── VIN screw terminal  →  Cytron MDD10A VIN  (raw battery voltage, motor power)
 
-TB6612 logic VCC  →  ESP32 3V3 pin
-Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one rail.
+Cytron MDD10A logic VCC  →  ESP32 3V3 pin
+Common ground: Battery −, hat GND, Pi GND, ESP32 GND, MDD10A GND — all one rail.
 ```
 
 ---
@@ -70,12 +70,12 @@ Common ground: Battery −, hat GND, Pi GND, ESP32 GND, TB6612 GND — all one r
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWMA — Right motor speed (LEDC ch 0, 20 kHz, 8-bit) |
-| 11 | AIN1 — Right motor direction A |
-| 12 | AIN2 — Right motor direction B |
-| 13 | PWMB — Left motor speed (LEDC ch 1, 20 kHz, 8-bit) |
-| 14 | BIN1 — Left motor direction A |
-| 15 | BIN2 — Left motor direction B |
+| 10 | PWM_R — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → Cytron MDD10A Ch1 |
+| 11 | DIR_R — Right side direction → Cytron MDD10A Ch1 |
+| 12 | PWM_L — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → Cytron MDD10A Ch2 |
+| 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
+| 14 | (free) |
+| 15 | (free) |
 | 17 | UART1 TX — Serial1 micro-ROS transport to Pi (via USB-UART adapter) |
 | 18 | UART1 RX — Serial1 micro-ROS transport from Pi (via USB-UART adapter) |
 | 19, 20 | Native USB D−/D+ — Serial0 USB CDC → display telemetry JSON to Pi |
