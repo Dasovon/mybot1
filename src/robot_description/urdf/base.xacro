@@ -12,7 +12,11 @@
   <xacro:property name="chassis_h" value="0.051"/>
 
   <!-- Wheelbase (front-to-rear axle distance) — PLACEHOLDER, measure when chassis arrives -->
-  <xacro:property name="wheelbase"    value="0.18"/>
+  <xacro:property name="wheelbase"      value="0.18"/>
+
+  <!-- Measured: motor shaft sits 23mm below chassis plate bottom surface.
+       Ground clearance = wheel_radius - bracket_offset = 34.14 - 23 = 11.14mm -->
+  <xacro:property name="bracket_offset" value="0.023"/>
 
   <!-- Inertia helpers -->
   <xacro:macro name="box_inertia" params="m l w h">
@@ -55,13 +59,16 @@
     </joint>
   </xacro:macro>
 
-  <!-- Base chassis — origin at wheel axle height, centered between all four wheels -->
+  <!-- Base chassis — origin at wheel axle height, centered between all four wheels.
+       Chassis bottom face is bracket_offset above the axle, so box center is offset in z. -->
   <link name="base_link">
     <visual>
+      <origin xyz="0 0 ${bracket_offset + chassis_h/2}" rpy="0 0 0"/>
       <geometry><box size="${chassis_l} ${chassis_w} ${chassis_h}"/></geometry>
       <material name="grey"/>
     </visual>
     <collision>
+      <origin xyz="0 0 ${bracket_offset + chassis_h/2}" rpy="0 0 0"/>
       <geometry><box size="${chassis_l} ${chassis_w} ${chassis_h}"/></geometry>
     </collision>
     <xacro:box_inertia m="2.5" l="${chassis_l}" w="${chassis_w}" h="${chassis_h}"/>
