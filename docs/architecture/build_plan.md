@@ -118,50 +118,48 @@ At each step: power on and measure voltage at the new component's power pin befo
 
 **Hardware reference:** [`docs/hardware/raspberry_pi_5.md`](../hardware/raspberry_pi_5.md)
 
-**2.1 — Flash Raspberry Pi OS Lite (64-bit)**
+**2.1 — Flash Ubuntu Server 24.04 LTS**
 
-> OS: **Raspberry Pi OS Lite (64-bit)** — Ubuntu Server had repeated cloud-init provisioning failures on the Pi 5. Raspberry Pi OS Lite (Debian Trixie) is dramatically more reliable. ROS 2 Jazzy packages are installed using the Debian Bookworm repo (binary compatible with Trixie).
+> OS: **Ubuntu Server 24.04 LTS (64-bit)** — Tier 1 for ROS 2 Jazzy, standard apt packages, no workarounds needed.
+> ⚠️ **Do NOT use Imager customization.** Setting hostname/user/SSH/WiFi in the Imager triggers cloud-init provisioning which fails intermittently on Pi 5. Flash with no customization and configure manually after first boot.
 
-Download and install Raspberry Pi Imager on your dev PC:
-https://www.raspberrypi.com/software/
-
-In the Imager:
+In Raspberry Pi Imager:
 1. Choose device: **Raspberry Pi 5**
-2. Choose OS: **Raspberry Pi OS Lite (64-bit)**
+2. Choose OS: **Other general-purpose OS → Ubuntu → Ubuntu Server 24.04 LTS (64-bit)**
 3. Choose storage: your microSD card (≥32GB recommended)
-4. Click the gear icon (⚙) before writing and configure:
-   - Set hostname: `pi5bot`
-   - Enable SSH
-   - Set username: `bot` / password of your choice
-   - Configure Wi-Fi (your network SSID + password)
-   - Set locale / timezone
-5. Write the image
-
-After flashing, before first boot (belt-and-suspenders SSH enable):
-```bash
-touch /media/ryan/bootfs/ssh
-```
+4. When asked about customization: **No / Skip**
+5. Write the image and let verification finish
 
 **2.2 — First boot and SSH**
 
-Insert the SD card into the Pi. Connect Ethernet. Power on. Wait ~60 seconds for first boot.
+Insert the SD card into the Pi. Connect **Ethernet only** — no USB peripherals yet. Power on and wait **5–10 minutes** for first boot (cloud-init runs on first boot even with no customization).
+
+Find the Pi's IP (check Google Wifi app or your router's DHCP table, or):
+```bash
+nmap -sn 192.168.86.0/24 | grep -i ubuntu
+```
 
 Clear any stale host key from previous flashes:
 ```bash
-ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "pi5bot.local"
+ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "<PI_IP>"
 ```
 
-Connect over SSH:
+Connect — default credentials are `ubuntu` / `ubuntu`:
 ```bash
-ssh bot@pi5bot.local
+ssh ubuntu@<PI_IP>
+# You will be forced to change the password immediately
 ```
 
-First-boot fixes:
+After password change, set hostname:
 ```bash
-sudo dpkg-reconfigure locales                     # enable en_US.UTF-8
-sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-sudo raspi-config                                 # Localisation → WLAN Country → US
-sudo nmtui                                        # configure WiFi if needed
+sudo hostnamectl set-hostname pi5bot
+sudo sed -i 's/127.0.1.1.*/127.0.1.1 pi5bot/' /etc/hosts
+sudo reboot
+```
+
+After reboot, SSH using the new hostname:
+```bash
+ssh ubuntu@pi5bot.local
 ```
 
 **2.3 — Update the system**
@@ -187,24 +185,20 @@ vcgencmd get_throttled   # must return 0x0
 
 **2.4 — Install ROS 2 Jazzy on Pi**
 
-Install base only — the Pi does not need RViz2.
-
-> Raspberry Pi OS Trixie (Debian 13) is not officially supported by Jazzy, but binary packages from the Jazzy/Bookworm (Debian 12) repo are compatible. The `bookworm` codename is used explicitly below.
+Install base only — the Pi does not run RViz2.
 
 ```bash
-# Locale (may already be set from first boot)
+# Locale
 sudo locale-gen en_US en_US.UTF-8
 sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 export LANG=en_US.UTF-8
 
-# Add ROS 2 GPG key
+# Add ROS 2 apt repo
 sudo apt install software-properties-common curl -y
 sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
   -o /usr/share/keyrings/ros-archive-keyring.gpg
-
-# Use 'bookworm' explicitly — Trixie uses Bookworm-compatible Jazzy packages
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-  http://packages.ros.org/ros2/ubuntu bookworm main" \
+  http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
   | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 sudo apt update && sudo apt install ros-jazzy-ros-base -y
@@ -259,7 +253,7 @@ vcgencmd get_throttled        # expect 0x0 — no throttling
 **Common failures:**
 - Undervoltage: cable resistance too high — use a short, high-quality USB-C cable rated for 5A.
 - No boot: check SD card seated, valid OS image.
-- ROS 2 install fails: verify apt sources list uses `bookworm` codename; Trixie is not listed at packages.ros.org but bookworm packages are compatible.
+- ROS 2 install fails: verify `$UBUNTU_CODENAME` resolves to `noble` (`cat /etc/os-release | grep CODENAME`). If not, the wrong Ubuntu image was flashed.
 
 ---
 

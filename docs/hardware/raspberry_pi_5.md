@@ -30,7 +30,7 @@ The Raspberry Pi 5 is the onboard compute node. It acts as the sensor bridge bet
 | Networking | Gigabit Ethernet, Wi-Fi 802.11ac (5 GHz), Bluetooth 5.0 |
 | GPIO | 40-pin header (standard RPi pinout) |
 | Power | 5V / 5A via USB-C PD |
-| OS | Raspberry Pi OS Lite (64-bit) — Debian 13 Trixie |
+| OS | Ubuntu Server 24.04 LTS (64-bit) |
 
 ---
 
@@ -96,42 +96,51 @@ Use an NVMe SSD via the Pi 5 PCIe M.2 HAT for rosbag recording. microSD cards ar
 
 | Item | Value |
 |---|---|
-| OS | Raspberry Pi OS Lite (64-bit), Debian 13 Trixie |
+| OS | Ubuntu Server 24.04 LTS (64-bit) |
 | Hostname | `pi5bot` |
-| Username | `bot` |
-| SSH | `ssh bot@pi5bot.local` |
-| mDNS | `pi5bot.local` (avahi-daemon installed) |
+| Username | `ubuntu` |
+| SSH | `ssh ubuntu@pi5bot.local` or `ssh ubuntu@<PI_IP>` |
 
-Ubuntu Server was abandoned after repeated cloud-init provisioning failures (missing SSH host keys, user accounts not created, hostname not applying, mDNS failures). Raspberry Pi OS Lite is dramatically more reliable for initial bring-up. See bringup notes in `docs/hardware/` for full details.
+**Key lesson from bring-up:** Do NOT use Imager customization (username, hostname, SSH, WiFi) when flashing Ubuntu Server — this triggers the cloud-init provisioning path which fails intermittently on Pi 5. Flash with no customization, log in as the default `ubuntu` user, then configure manually.
 
-### ROS 2 Jazzy on Raspberry Pi OS Trixie
+### ROS 2 Jazzy on Ubuntu 24.04
 
-ROS 2 Jazzy targets Ubuntu 24.04 (Tier 1) and Debian Bookworm (Tier 3). Raspberry Pi OS Trixie (Debian 13) is not officially listed, but Bookworm binary packages are compatible. Use `bookworm` as the apt codename explicitly — see build plan Step 2.4 for the full install procedure.
-
-The dev PC must run Ubuntu 24.04 + ROS 2 Jazzy to match the Pi for cross-machine topic communication.
+Ubuntu 24.04 is Tier 1 for ROS 2 Jazzy — standard apt packages, no workarounds. The dev PC must also run Ubuntu 24.04 + Jazzy for cross-machine topic communication.
 
 ## Setup Notes
 
-### Imager bring-up procedure (what worked)
+### Imager bring-up procedure
+
+```
+OS:      Ubuntu Server 24.04 LTS (64-bit)
+Device:  Raspberry Pi 5
+Storage: microSD (≥32 GB)
+Customization: NONE — do not set hostname/user/SSH/WiFi in Imager
+```
+
+First boot — Pi connected via Ethernet only, no other USB hardware:
 
 ```bash
-# Flash: Raspberry Pi OS Lite (64-bit) via Raspberry Pi Imager
-# In Imager advanced settings: hostname, username/password, SSH enabled, locale
+# Find Pi IP (check router/Google Wifi app, or:)
+nmap -sn 192.168.86.0/24 | grep -i ubuntu
 
-# After flashing, before first boot (on dev machine):
-touch /media/ryan/bootfs/ssh
-# Create /media/ryan/bootfs/userconf with: bot:<hash from: openssl passwd -6>
+# Clear stale host key if reflashed:
+ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "<PI_IP>"
 
-# Clear stale SSH host key after reflash:
-ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "raspberrypi.local"
+# SSH in — default credentials:
+ssh ubuntu@<PI_IP>
+# password: ubuntu  (forced to change on first login)
+```
 
-# First boot fixes on Pi:
-sudo dpkg-reconfigure locales                    # enable en_US.UTF-8
-sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-sudo raspi-config                                # Localisation → WLAN Country → US
+After password change, set hostname:
+```bash
 sudo hostnamectl set-hostname pi5bot
-# /etc/hosts: change 127.0.1.1 raspberrypi → 127.0.1.1 pi5bot
-sudo nmtui                                       # configure WiFi
+sudo sed -i 's/127.0.1.1.*/127.0.1.1 pi5bot/' /etc/hosts
+```
+
+Configure WiFi (optional — keep Ethernet for ROS traffic):
+```bash
+sudo nmtui
 ```
 
 ### USB power — required config.txt entry
@@ -144,8 +153,6 @@ usb_max_current_enable=1
 ```
 
 This allows USB ports to draw up to 1600mA instead of 600mA. Set it before connecting any USB peripherals.
-
-Alternatively, use `raspi-config` → Performance Options → P4 USB Current (persistent).
 
 Verify after reboot:
 ```bash

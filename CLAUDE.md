@@ -545,7 +545,7 @@ The robot is considered minimally operational when it can:
 
 | Item | Value |
 |---|---|
-| OS (Pi) | Raspberry Pi OS Lite 64-bit (Debian 13 Trixie) — hostname: `pi5bot`, user: `bot` |
+| OS (Pi) | Ubuntu Server 24.04 LTS (64-bit) — hostname: `pi5bot`, user: `ubuntu` |
 | OS (dev PC) | Ubuntu 24.04 LTS — required for ROS 2 Jazzy binary packages |
 | ROS | ROS 2 Jazzy Jalisco |
 | Pi | Raspberry Pi 5 |
