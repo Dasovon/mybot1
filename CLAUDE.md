@@ -50,17 +50,27 @@ A distributed ROS 2 Humble autonomous mobile robot (AMR) — clean, standalone b
 
 ```
 Battery (9–24V DC, e.g. 3S LiPo ~12V)
-    └── EP-0225 (52pi) INPUT (DC barrel)
-            ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
-            │       ├── Pi USB-A  →  ESP32-S3 Serial1 UART adapter  (micro-ROS, /dev/ttyUSB0)
-            │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)
-            │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
-            │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
-            └── VIN screw terminal  →  Cytron MDD10A VIN  (raw battery voltage, motor power)
+    ├── [10A inline fuse]  →  Cytron MDD10A VIN  (raw battery voltage, motor power)
+    └── [3A inline fuse]  →  Master power switch
+              └── EP-0225 (52pi) INPUT (DC barrel)
+                      ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
+                      │       ├── Pi USB-A  →  ESP32-S3 Serial1 UART adapter  (micro-ROS, /dev/ttyUSB0)
+                      │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)
+                      │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
+                      │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
+                      └── VIN screw terminal  →  (tied to barrel jack input — do not double-connect)
 
 Cytron MDD10A logic VCC  →  ESP32 3V3 pin
-Common ground: Battery −, hat GND, Pi GND, ESP32 GND, MDD10A GND — all one rail.
+Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all one rail.
 ```
+
+**Fuse sizing rationale:**
+- Logic rail (EP-0225 input): 3A — Pi 5 draws up to 5A at 5V ≈ 2.1A at 12V; 3A gives margin without masking real faults
+- Motor rail (MDD10A VIN): 10A — 4× JGA25-371 rated 750 mA each (stall), plus MDD10A quiescent draw; 10A covers stall condition
+
+**Master power switch:** Inline between battery and EP-0225 barrel jack. Kills logic rail (Pi + ESP32) without disturbing motor rail fuse. Safe to work on robot with switch off; motor fuse remains in place as always-on protection.
+
+**EP-0225 VIN screw terminal:** Tied directly to the barrel jack input — do not run a second battery connection to the screw terminal. Use barrel jack for all input; VIN pad is for board-level access only.
 
 ---
 
@@ -84,10 +94,9 @@ Common ground: Battery −, hat GND, Pi GND, ESP32 GND, MDD10A GND — all one r
 | 41 | Left encoder B (read in ISR) ⚠️ EMI |
 | 42 | Right encoder A — `attachInterrupt` CHANGE |
 
-**Motor A = RIGHT, Motor B = LEFT.**
-STBY not wired — Adafruit breakout has onboard 10 kΩ pull-up (always enabled).
+**Right side (Ch1) = front_right + rear_right motors in parallel. Left side (Ch2) = front_left + rear_left motors in parallel.**
 
-⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612 1 kHz PWM noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
+⚠️ **GPIO 40/41 EMI:** Left encoder picks up MDD10A 20 kHz PWM switching noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
 
 **Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping pins).
 GPIO 17/18 = Serial1 (micro-ROS). GPIO 19/20 = Serial0 USB CDC (display telemetry). Do not repurpose these.
