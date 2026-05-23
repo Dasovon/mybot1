@@ -544,7 +544,7 @@ The robot is considered minimally operational when it can:
 
 | Item | Value |
 |---|---|
-| OS | Ubuntu 22.04 LTS |
+| OS (Pi) | Raspberry Pi OS Lite 64-bit (Debian 13 Trixie) — hostname: `pi5bot`, user: `bot` |
 | ROS | ROS 2 Humble Hawksbill |
 | Pi | Raspberry Pi 5 |
 | ESP32 firmware | PlatformIO + Arduino framework — `firmware/esp32/` |

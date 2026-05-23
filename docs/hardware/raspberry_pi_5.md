@@ -30,7 +30,7 @@ The Raspberry Pi 5 is the onboard compute node. It acts as the sensor bridge bet
 | Networking | Gigabit Ethernet, Wi-Fi 802.11ac (5 GHz), Bluetooth 5.0 |
 | GPIO | 40-pin header (standard RPi pinout) |
 | Power | 5V / 5A via USB-C PD |
-| OS | Ubuntu 22.04 LTS (64-bit), ROS 2 Humble |
+| OS | Raspberry Pi OS Lite (64-bit) — Debian 13 Trixie |
 
 ---
 
@@ -92,12 +92,55 @@ Use an NVMe SSD via the Pi 5 PCIe M.2 HAT for rosbag recording. microSD cards ar
 
 ---
 
+## Stable Baseline (as of Phase 0)
+
+| Item | Value |
+|---|---|
+| OS | Raspberry Pi OS Lite (64-bit), Debian 13 Trixie |
+| Hostname | `pi5bot` |
+| Username | `bot` |
+| SSH | `ssh bot@pi5bot.local` |
+| mDNS | `pi5bot.local` (avahi-daemon installed) |
+
+Ubuntu Server was abandoned after repeated cloud-init provisioning failures (missing SSH host keys, user accounts not created, hostname not applying, mDNS failures). Raspberry Pi OS Lite is dramatically more reliable for initial bring-up. See bringup notes in `docs/hardware/` for full details.
+
+### ⚠️ ROS 2 compatibility — decision required before Phase 3
+
+ROS 2 **Humble** binary packages (`ros-humble-*`) are published for Ubuntu 22.04 only. Raspberry Pi OS Trixie (Debian 13) is not officially supported.
+
+Options — choose one before starting ROS 2 install on the Pi:
+
+| Option | Effort | Notes |
+|---|---|---|
+| **Docker** (Ubuntu 22.04 + Humble inside container) | Medium | Cleanest isolation; dev PC stays on Humble |
+| **ROS 2 Jazzy from source** (Debian Bookworm/Trixie compat) | High | Jazzy is closest but still not Trixie-native |
+| **Humble from source** on Trixie | High | Long build, complex deps |
+
+The dev PC runs Ubuntu 22.04 / Humble — the Pi ROS 2 version must match for cross-machine topic communication.
+
 ## Setup Notes
 
-### OS requirement
-**Ubuntu 22.04 LTS (64-bit) is required** — not Raspberry Pi OS. ROS 2 Humble binary packages (`ros-humble-*`) are only published for Ubuntu 22.04 arm64 (Tier 1 support). Raspberry Pi OS (Bookworm/Debian 12) is Tier 3 — ROS2 would require compiling from source.
+### Imager bring-up procedure (what worked)
 
-Use Raspberry Pi Imager → Other general-purpose OS → Ubuntu → **Ubuntu Server 22.04 LTS (64-bit)**.
+```bash
+# Flash: Raspberry Pi OS Lite (64-bit) via Raspberry Pi Imager
+# In Imager advanced settings: hostname, username/password, SSH enabled, locale
+
+# After flashing, before first boot (on dev machine):
+touch /media/ryan/bootfs/ssh
+# Create /media/ryan/bootfs/userconf with: bot:<hash from: openssl passwd -6>
+
+# Clear stale SSH host key after reflash:
+ssh-keygen -f "/home/ryan/.ssh/known_hosts" -R "raspberrypi.local"
+
+# First boot fixes on Pi:
+sudo dpkg-reconfigure locales                    # enable en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+sudo raspi-config                                # Localisation → WLAN Country → US
+sudo hostnamectl set-hostname pi5bot
+# /etc/hosts: change 127.0.1.1 raspberrypi → 127.0.1.1 pi5bot
+sudo nmtui                                       # configure WiFi
+```
 
 ### USB power — required config.txt entry
 The Pi 5 limits USB port power to 600mA if it doesn't successfully negotiate 5V/5A with the power supply. The EP-0225 (52pi) may not advertise 5V/5A in a way the Pi recognizes. Without this flag, RPLidar (~500mA peak) and RealSense (~900mA) are at risk of undervoltage.
