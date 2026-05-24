@@ -1,6 +1,25 @@
 #include "microros.h"
 
 #include <micro_ros_arduino.h>
+
+// Override the weak default_transport.cpp Serial0 implementations → Serial1 (GPIO 17/18)
+extern "C" {
+    bool arduino_transport_open(struct uxrCustomTransport *) {
+        Serial1.begin(115200, SERIAL_8N1, 18, 17);
+        return true;
+    }
+    bool arduino_transport_close(struct uxrCustomTransport *) {
+        Serial1.end();
+        return true;
+    }
+    size_t arduino_transport_write(struct uxrCustomTransport *, const uint8_t *buf, size_t len, uint8_t *) {
+        return Serial1.write(buf, len);
+    }
+    size_t arduino_transport_read(struct uxrCustomTransport *, uint8_t *buf, size_t len, int timeout, uint8_t *) {
+        Serial1.setTimeout(timeout);
+        return Serial1.readBytes((char *)buf, len);
+    }
+}
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
@@ -123,8 +142,8 @@ static void destroy_entities() {
 // Public API
 // ---------------------------------------------------------------------------
 void microros_init() {
-    Serial1.begin(115200, SERIAL_8N1, 18, 17);  // RX=GPIO18, TX=GPIO17
-    set_microros_serial_transports(Serial1);
+    // Serial1 opened in arduino_transport_open override above
+    set_microros_transports();
     state        = WAITING_AGENT;
     last_ping_ms = millis();
 }

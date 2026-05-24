@@ -14,7 +14,7 @@ bool imu_init() {
     // External crystal improves accuracy; required before entering any fusion mode.
     bno.setExtCrystalUse(true);
     // IMU mode: accel + gyro only, no magnetometer.
-    bno.setMode(Adafruit_BNO055::OPERATION_MODE_IMUPLUS);
+    bno.setMode(OPERATION_MODE_IMUPLUS);
     initialized = true;
     return true;
 }
