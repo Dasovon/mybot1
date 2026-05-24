@@ -1,25 +1,18 @@
 <launch>
-  <!-- Intel RealSense D435 — 640x480 @ 15 Hz depth + color + point cloud
-       realsense2_camera v4.57.7 on ROS Jazzy publishes under the double namespace
-       /camera/camera/... (camera_namespace=camera, camera_name=camera defaults).
-
-       Topics produced:
+  <!-- Intel RealSense D435 — realsense2_camera v4.57.7 on ROS Jazzy
+       Topics published:
          /camera/camera/color/image_raw           sensor_msgs/Image       15 Hz
          /camera/camera/color/camera_info         sensor_msgs/CameraInfo  15 Hz
-         /camera/camera/depth/image_rect_raw      sensor_msgs/Image       15 Hz
-         /camera/camera/depth/camera_info         sensor_msgs/CameraInfo  15 Hz
-         /camera/camera/depth/color/points        sensor_msgs/PointCloud2 ~13 Hz
+         /camera/camera/depth/image_rect_raw      sensor_msgs/Image        6 Hz
+         /camera/camera/depth/camera_info         sensor_msgs/CameraInfo   6 Hz
+         /camera/camera/depth/color/points        sensor_msgs/PointCloud2  6 Hz (RGB8 colored)
+
+       pointcloud__neon_.stream_filter=2 (COLOR) is set via config_file so the
+       PointCloud2 messages contain an rgb field; this enables RGB8 in RViz2.
   -->
   <include file="$(find-pkg-share realsense2_camera)/launch/rs_launch.py">
-    <arg name="camera_name"                  value="camera"/>
-    <arg name="rgb_camera.color_profile"     value="640x480x15"/>
-    <arg name="depth_module.depth_profile"   value="640x480x15"/>
-    <arg name="enable_infra1"                value="false"/>
-    <arg name="enable_infra2"                value="false"/>
-    <!-- pointcloud param name in v4.x is pointcloud__neon_.enable at runtime;
-         the launch arg form below applies it at startup -->
-    <arg name="pointcloud.enable"            value="true"/>
-    <arg name="align_depth.enable"           value="false"/>
-    <arg name="publish_tf"                   value="true"/>
+    <arg name="camera_name"    value="camera"/>
+    <arg name="config_file"    value="$(find-pkg-share robot_bringup)/config/realsense.yaml"/>
+    <arg name="publish_tf"     value="true"/>
   </include>
 </launch>

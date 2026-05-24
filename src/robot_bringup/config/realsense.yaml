@@ -1,28 +1,33 @@
-camera:
-  ros__parameters:
-    camera_name: camera
-    serial_no: ''
-    usb_port_id: ''
-    device_type: ''
+# Flat parameter file for realsense2_camera rs_launch.py config_file arg.
+# Keys must match the names rs_launch.py passes to the Node (not ROS2 YAML namespace format).
+# pointcloud__neon_.* names are the runtime param names in v4.57.7; dot notation
+# equivalents (pointcloud.*) map to different internal params and don't work reliably.
 
-    enable_color: true
-    rgb_camera.color_profile: 640x480x15
-    rgb_camera.color_format: RGB8
+camera_name: camera
+serial_no: ''
+device_type: ''
 
-    enable_depth: true
-    depth_module.depth_profile: 640x480x15
-    depth_module.depth_format: Z16
+enable_color: true
+rgb_camera.color_profile: 424x240x15
+rgb_camera.color_format: RGB8
 
-    enable_infra1: false
-    enable_infra2: false
+enable_depth: true
+depth_module.depth_profile: 424x240x6
+depth_module.depth_format: Z16
 
-    pointcloud.enable: true
-    pointcloud.stream_filter: 2        # COLOR stream as texture
-    pointcloud.stream_index_filter: 0
-    pointcloud.ordered_pc: false
+enable_infra1: false
+enable_infra2: false
 
-    align_depth.enable: false
+pointcloud.enable: true
+pointcloud__neon_.enable: true
+pointcloud__neon_.stream_filter: 2
+pointcloud__neon_.stream_index_filter: 0
+pointcloud__neon_.ordered_pc: false
 
-    enable_sync: false
-    publish_tf: true
-    tf_publish_rate: 0.0
+decimation_filter.enable: false
+
+align_depth.enable: true
+
+enable_sync: false
+publish_tf: true
+tf_publish_rate: 0.0
