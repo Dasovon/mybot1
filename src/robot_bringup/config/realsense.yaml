@@ -1,0 +1,28 @@
+camera:
+  ros__parameters:
+    camera_name: camera
+    serial_no: ''
+    usb_port_id: ''
+    device_type: ''
+
+    enable_color: true
+    rgb_camera.color_profile: 640x480x15
+    rgb_camera.color_format: RGB8
+
+    enable_depth: true
+    depth_module.depth_profile: 640x480x15
+    depth_module.depth_format: Z16
+
+    enable_infra1: false
+    enable_infra2: false
+
+    pointcloud.enable: true
+    pointcloud.stream_filter: 2        # COLOR stream as texture
+    pointcloud.stream_index_filter: 0
+    pointcloud.ordered_pc: false
+
+    align_depth.enable: false
+
+    enable_sync: false
+    publish_tf: true
+    tf_publish_rate: 0.0

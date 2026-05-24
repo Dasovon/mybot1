@@ -16,8 +16,9 @@
 | `/battery_state` | `sensor_msgs/BatteryState` | ESP32 micro-ROS / serial bridge | monitoring | 1 Hz |
 | `/odom` | `nav_msgs/Odometry` | robot_localization | Nav2, SLAM | 20 Hz |
 | `/scan` | `sensor_msgs/LaserScan` | rplidar_node | slam_toolbox, Nav2 | ~5.5 Hz |
-| `/camera/depth/points` | `sensor_msgs/PointCloud2` | realsense2_camera | Nav2 voxel layer | 15 Hz |
-| `/camera/color/image_raw` | `sensor_msgs/Image` | realsense2_camera | YOLO (future) | 15 Hz |
+| `/camera/camera/depth/color/points` | `sensor_msgs/PointCloud2` | realsense2_camera | Nav2 voxel layer | ~13 Hz |
+| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | realsense2_camera | YOLO (future) | 15 Hz |
+| `/camera/camera/depth/image_rect_raw` | `sensor_msgs/Image` | realsense2_camera | depth consumers | 15 Hz |
 
 Do not rename these topics without updating: CLAUDE.md, the EKF config, Nav2 config, and all subscribers.
 

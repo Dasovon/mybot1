@@ -166,8 +166,9 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 | `/battery_state` | ESP32 micro-ROS | monitoring nodes | 1 Hz |
 | `/odom` | robot_localization | Nav2, SLAM | 20 Hz |
 | `/scan` | rplidar_node | slam_toolbox, Nav2 obstacle layer | ~5.5 Hz |
-| `/camera/depth/points` | realsense2_camera | Nav2 voxel layer | 15 Hz |
-| `/camera/color/image_raw` | realsense2_camera | future: YOLO | 15 Hz |
+| `/camera/camera/depth/color/points` | realsense2_camera | Nav2 voxel layer | ~13 Hz |
+| `/camera/camera/color/image_raw` | realsense2_camera | future: YOLO | 15 Hz |
+| `/camera/camera/depth/image_rect_raw` | realsense2_camera | depth consumers | 15 Hz |
 
 ---
 
