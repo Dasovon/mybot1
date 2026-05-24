@@ -164,4 +164,4 @@ The following require sensors and motors to be wired:
 - [ ] Wheel velocity tracks `cmd_vel` command under closed-loop PID (wire Cytron MDD10A GPIO 10–13, encoders GPIO 39–42)
 - [ ] Robot moves forward on `cmd_vel` then stops on watchdog timeout
 - [ ] Battery task keeps publishing without gaps while motors are under load
-- [ ] RGB LED off (GPIO 48 on Lonely Binary board — `neopixelWrite()` approach needs timing fix)
+- [x] RGB LED off (GPIO 48) — fixed: `neopixelWrite(48, 0, 0, 0)` called on first `loop()` iteration after framework fully initialised; confirmed off after reflash
