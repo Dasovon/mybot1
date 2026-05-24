@@ -14,6 +14,7 @@ import socket
 import threading
 import time
 
+import lgpio
 import psutil
 from luma.core.interface.serial import spi
 from luma.oled.device import ssd1309
@@ -24,6 +25,32 @@ GPIO_DC  = 25
 GPIO_RST = 27
 SPI_PORT = 0
 SPI_DEV  = 0
+
+# Pi 5 main GPIO is on gpiochip4
+GPIOCHIP = 4
+
+
+class LGPIOAdapter:
+    """Minimal RPi.GPIO-compatible adapter using lgpio for Pi 5."""
+    BCM = 11
+    OUT = 0
+    HIGH = 1
+    LOW = 0
+
+    def __init__(self):
+        self._handle = lgpio.gpiochip_open(GPIOCHIP)
+
+    def setmode(self, mode):
+        pass  # lgpio uses chip/line addressing, no mode concept
+
+    def setup(self, pin, mode):
+        lgpio.gpio_claim_output(self._handle, pin)
+
+    def output(self, pin, value):
+        lgpio.gpio_write(self._handle, pin, value)
+
+    def cleanup(self):
+        lgpio.gpiochip_close(self._handle)
 
 SERIAL_PORT = '/dev/ttyUSB0'
 SERIAL_BAUD = 9600
@@ -112,7 +139,8 @@ def render(device, esp: SerialReader):
 
 
 def main():
-    serial_obj = spi(device=SPI_DEV, port=SPI_PORT, gpio_DC=GPIO_DC, gpio_RST=GPIO_RST)
+    serial_obj = spi(device=SPI_DEV, port=SPI_PORT, gpio_DC=GPIO_DC, gpio_RST=GPIO_RST,
+                     gpio=LGPIOAdapter())
     device = ssd1309(serial_obj, width=128, height=64)
     device.contrast(128)
 
