@@ -83,6 +83,17 @@ void setup() {
 // loop — runs on Core 1
 // ---------------------------------------------------------------------------
 void loop() {
+    // Turn off the Lonely Binary RGB LED (GPIO 48, WS2812) on the first loop
+    // iteration. neopixelWrite() uses the RMT peripheral which is not safe to
+    // call at the top of setup() — the DMA callback hasn't fired yet and the
+    // call blocks indefinitely. By the first loop() iteration the framework is
+    // fully up and the call completes in a few microseconds.
+    static bool led_off = false;
+    if (!led_off) {
+        neopixelWrite(48, 0, 0, 0);
+        led_off = true;
+    }
+
     uint32_t now = millis();
 
     // -----------------------------------------------------------------------
