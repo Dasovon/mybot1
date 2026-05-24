@@ -8,6 +8,7 @@ static bool initialized = false;
 
 bool imu_init() {
     Wire.begin(IMU_SDA, IMU_SCL);
+    Wire.setTimeOut(50);  // 50 ms max per operation — prevents hang with no pull-ups/devices
     if (!bno.begin()) {
         return false;
     }

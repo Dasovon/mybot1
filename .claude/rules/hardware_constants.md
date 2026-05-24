@@ -85,10 +85,11 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | `rear_left_wheel` | Rear left drive wheel |
 | `rear_right_wheel` | Rear right drive wheel |
 
-## micro-ROS stable device path
+## Serial transport (ESP32 ↔ Pi)
 
-```
-/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_58:E6:C5:5C:23:1C-if00
-```
+| Role | ESP32 port | Pi device | Notes |
+|---|---|---|---|
+| micro-ROS + flashing | Native USB CDC, GPIO 19/20 | `/dev/ttyACM0` | Built-in USB-JTAG/Serial (303a:1001); 921600 baud; auto-reset via 1200bps touch |
+| Display telemetry (Phase 6) | Serial0 UART0, GPIO 43 TX / 44 RX | `/dev/ttyUSB0` | Lonely Binary on-board CH340 (1a86:7522); deferred |
 
 Required firmware build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`

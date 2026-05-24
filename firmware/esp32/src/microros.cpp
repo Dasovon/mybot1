@@ -2,24 +2,36 @@
 
 #include <micro_ros_arduino.h>
 
-// Override the weak default_transport.cpp Serial0 implementations → Serial1 (GPIO 17/18)
-extern "C" {
-    bool arduino_transport_open(struct uxrCustomTransport *) {
-        Serial1.begin(115200, SERIAL_8N1, 18, 17);
-        return true;
-    }
-    bool arduino_transport_close(struct uxrCustomTransport *) {
-        Serial1.end();
-        return true;
-    }
-    size_t arduino_transport_write(struct uxrCustomTransport *, const uint8_t *buf, size_t len, uint8_t *) {
-        return Serial1.write(buf, len);
-    }
-    size_t arduino_transport_read(struct uxrCustomTransport *, uint8_t *buf, size_t len, int timeout, uint8_t *) {
-        Serial1.setTimeout(timeout);
-        return Serial1.readBytes((char *)buf, len);
-    }
+// micro-ROS transport: Serial (native USB CDC, GPIO 19/20) → Pi /dev/ttyACM0
+// setTxTimeoutMs(0) prevents blocking writes before the host opens the port.
+extern "C" bool arduino_transport_open(struct uxrCustomTransport * transport) {
+    (void)transport;
+    Serial.setTxTimeoutMs(100);  // allow buffer to drain; 0 causes partial writes during entity creation
+    Serial.begin(921600);
+    return true;
 }
+
+extern "C" bool arduino_transport_close(struct uxrCustomTransport * transport) {
+    (void)transport;
+    return true;
+}
+
+extern "C" size_t arduino_transport_write(struct uxrCustomTransport* transport,
+                                           const uint8_t* buf, size_t len, uint8_t* err) {
+    (void)transport; (void)err;
+    size_t sent = Serial.write(buf, len);
+    Serial.flush();
+    return sent;
+}
+
+extern "C" size_t arduino_transport_read(struct uxrCustomTransport* transport,
+                                          uint8_t* buf, size_t len, int timeout_ms,
+                                          uint8_t* err) {
+    (void)transport; (void)err;
+    Serial.setTimeout(timeout_ms < 0 ? 0 : timeout_ms);
+    return Serial.readBytes((char*)buf, len);
+}
+
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
@@ -74,14 +86,17 @@ static bool create_entities() {
     if (rclc_support_init(&support, 0, nullptr, &allocator) != RCL_RET_OK) return false;
     if (rclc_node_init_default(&node, "esp32_base_node", "", &support) != RCL_RET_OK) return false;
 
-    // Odom — BEST_EFFORT (30 Hz, dropped messages immediately replaced)
-    if (rclc_publisher_init_best_effort(
+    // Odom — RELIABLE: nav_msgs/Odometry serializes to ~712 bytes which exceeds the
+    // 512-byte XRCE custom-transport MTU. RELIABLE streams support fragmentation;
+    // BEST_EFFORT does not, so odom silently drops on BEST_EFFORT.
+    if (rclc_publisher_init_default(
             &pub_odom, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
             "diff_cont/odom") != RCL_RET_OK) return false;
 
-    // IMU — BEST_EFFORT (30 Hz)
-    if (rclc_publisher_init_best_effort(
+    // IMU — RELIABLE (consistent with odom; sensor_msgs/Imu is ~312 bytes but
+    // RELIABLE avoids any future size surprises and matches reference design)
+    if (rclc_publisher_init_default(
             &pub_imu, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
             "imu/imu") != RCL_RET_OK) return false;
@@ -142,7 +157,7 @@ static void destroy_entities() {
 // Public API
 // ---------------------------------------------------------------------------
 void microros_init() {
-    // Serial1 opened in arduino_transport_open override above
+    // Serial (USB CDC, GPIO 19/20) opened in arduino_transport_open on first agent ping
     set_microros_transports();
     state        = WAITING_AGENT;
     last_ping_ms = millis();

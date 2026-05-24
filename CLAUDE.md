@@ -34,7 +34,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone bu
 |---|---|---|---|
 | Power | EP-0225 (52pi) | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
-| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Serial1 UART (GPIO 17/18) → USB adapter → Pi `/dev/ttyUSB0` (micro-ROS) \| Serial0 USB CDC → Pi `/dev/ttyACM0` (display telemetry) | ESP32 |
+| Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Native USB CDC (GPIO 19/20) → Pi `/dev/ttyACM0` (micro-ROS + flashing) \| CH340 UART0 (GPIO 43/44) → Pi `/dev/ttyUSB0` (display telemetry, Phase 6) | ESP32 |
 | Motor driver | Cytron MDD10A (dual channel 10A) | GPIO 10–13 (PWM + DIR) — **not yet wired** | ESP32 |
 | Motors + encoders | 4× JGA25-371 DC 12V, 45:1 gear ratio (skid steer, 2 per side) | GPIO 39–42 (quadrature, 1010 CPR, one encoder per side) — **not yet wired** | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
@@ -54,8 +54,8 @@ Battery (9–24V DC, e.g. 3S LiPo ~12V)
     └── [3A inline fuse]  →  Master power switch
               └── EP-0225 (52pi) INPUT (DC barrel)
                       ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
-                      │       ├── Pi USB-A  →  ESP32-S3 Serial1 UART adapter  (micro-ROS, /dev/ttyUSB0)
-                      │       ├── Pi USB-A  →  ESP32-S3 Serial0 USB CDC       (display telemetry, /dev/ttyACM0)
+                      │       ├── Pi USB-A  →  ESP32-S3 native USB CDC        (micro-ROS + flashing, /dev/ttyACM0)
+                      │       ├── Pi USB-A  →  ESP32-S3 CH340 UART0           (display telemetry Phase 6, /dev/ttyUSB0)
                       │       ├── Pi USB-A  →  RPLidar A1      (power + data, USB 2.0)
                       │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
                       └── VIN screw terminal  →  (tied to barrel jack input — do not double-connect)
@@ -86,9 +86,9 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all o
 | 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
 | 14 | (free) |
 | 15 | (free) |
-| 17 | UART1 TX — Serial1 micro-ROS transport to Pi (via USB-UART adapter) |
-| 18 | UART1 RX — Serial1 micro-ROS transport from Pi (via USB-UART adapter) |
-| 19, 20 | Native USB D−/D+ — Serial0 USB CDC → display telemetry JSON to Pi |
+| 17 | (free — UART1 not used for micro-ROS; CH340 connects to UART0 GPIO 43/44) |
+| 18 | (free) |
+| 19, 20 | Native USB D−/D+ — micro-ROS transport + flashing → Pi `/dev/ttyACM0` |
 | 39 | Right encoder B (read in ISR) |
 | 40 | Left encoder A — `attachInterrupt` CHANGE ⚠️ EMI |
 | 41 | Left encoder B (read in ISR) ⚠️ EMI |
@@ -98,8 +98,8 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all o
 
 ⚠️ **GPIO 40/41 EMI:** Left encoder picks up MDD10A 20 kHz PWM switching noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
 
-**Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping pins).
-GPIO 17/18 = Serial1 (micro-ROS). GPIO 19/20 = Serial0 USB CDC (display telemetry). Do not repurpose these.
+**Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED on DevKitC-1 — but Lonely Binary uses GPIO 48 for RGB LED), 43/44 (UART0 / CH340), 0/45/46 (strapping pins).
+GPIO 19/20 = native USB CDC (micro-ROS + flashing — do not repurpose). GPIO 43/44 = UART0 via CH340 (display telemetry Phase 6).
 
 ---
 
@@ -119,33 +119,40 @@ Encoder wire colors (JGA25-371): Red/White = motor power, Blue/Black = encoder p
 
 The ESP32-S3 uses **two independent serial connections** to the Pi, on two separate USB ports:
 
-| Role | ESP32 | Adapter | Pi device | Purpose |
-|---|---|---|---|---|
-| micro-ROS | Serial1, GPIO 17 TX / 18 RX | USB-UART adapter (CP2102/CH340) | `/dev/ttyUSB0` | ROS topics: odom, IMU, battery, cmd_vel |
-| Display telemetry | Serial0, native USB CDC (GPIO 19/20) | USB cable (direct) | `/dev/ttyACM0` | INA219 JSON stream → display daemon |
+| Role | ESP32 | Pi device | Purpose |
+|---|---|---|---|
+| micro-ROS + flashing | Native USB CDC, GPIO 19/20 (built-in USB-JTAG, VID 303a:1001) | `/dev/ttyACM0` | ROS topics: odom, IMU, battery, cmd_vel; auto-reset flashing |
+| Display telemetry (Phase 6) | UART0, GPIO 43 TX / 44 RX via Lonely Binary CH340 (VID 1a86:7522) | `/dev/ttyUSB0` | INA219 JSON stream → display daemon |
 
-**Why two ports:** The display daemon is a plain Python systemd service — ROS2-independent, starts at boot, always on. It reads battery voltage directly from Serial0 regardless of whether the micro-ROS agent or ROS2 is running. Battery and system status are visible on the OLED during bringup, crashes, and reflashing.
+**Why two ports:** The display daemon (Phase 6) is a ROS2-independent systemd service. It reads battery voltage from the CH340 UART regardless of whether micro-ROS or ROS2 is running. During Phases 1–5, the CH340 port is unused.
+
+**Firmware transport (validated):** `Serial` (native USB CDC) via four custom `arduino_transport_*` weak-function overrides. Key details:
+- `Serial.setTxTimeoutMs(100)` — prevents partial writes during XRCE entity creation
+- `Serial.begin(921600)` — 921600 baud required for odom + IMU bandwidth at 30 Hz
+- Both `pub_odom` and `pub_imu` use `rclc_publisher_init_default` (RELIABLE) — `nav_msgs/Odometry` serializes to ~712 bytes which exceeds the 512-byte XRCE MTU; RELIABLE supports fragmentation, BEST_EFFORT silently drops oversized messages
 
 **Firmware build flags:**
 ```ini
--DARDUINO_USB_CDC_ON_BOOT=1           ; enables Serial0 USB CDC for display telemetry
--DMICRO_ROS_TRANSPORT_ARDUINO_SERIAL  ; micro-ROS uses hardware Serial1
+-DARDUINO_USB_CDC_ON_BOOT=1   ; enables native USB CDC (Serial) for micro-ROS
+-DARDUINO_USB_MODE=1          ; uses built-in hardware USB-JTAG/Serial controller
 ```
 
-**Serial1 init in firmware:**
-```cpp
-Serial1.begin(115200, SERIAL_8N1, 18, 17);  // RX=GPIO18, TX=GPIO17
-set_microros_serial_transports(Serial1);
+**Flash from Pi (no button press needed):**
+```bash
+python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
+    --before default-reset --after hard-reset \
+    write-flash --flash-mode dio --flash-freq 80m --flash-size detect \
+    0x10000 firmware.bin
 ```
 
 **Run micro-ROS agent on Pi:**
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/microros_ws/install/setup.bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 ```
 
-Wi-Fi used only for OTA flashing and TelnetStream debug monitoring — **not** for micro-ROS.
+**See also:** [`docs/testing/phase1_firmware_validation_2026-05-24.md`](docs/testing/phase1_firmware_validation_2026-05-24.md) — full log of transport issues discovered during Phase 1 bringup.
 
 ---
 
@@ -435,8 +442,9 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - **Nav2 Jazzy breaking change:** Nav2 Jazzy defaults to `geometry_msgs/TwistStamped` on `cmd_vel`. Set `enable_stamped_cmd_vel: false` in the Nav2 `controller_server` config to keep `geometry_msgs/Twist` on `/diff_cont/cmd_vel_unstamped`. The ESP32 firmware uses Twist — do not change this without updating the micro-ROS subscriber type.
 
 ### micro-ROS
-- Transport is Serial1 UART (GPIO 17 TX / 18 RX) via USB-UART adapter to `/dev/ttyUSB0`. Not Wi-Fi, not native USB.
-- Serial0 (native USB CDC, GPIO 19/20) is reserved for display telemetry JSON — do not use it for micro-ROS.
+- Transport is native USB CDC (GPIO 19/20, `Serial`) → Pi `/dev/ttyACM0` at 921600 baud. Not Serial1, not CH340, not Wi-Fi.
+- CH340 UART0 (GPIO 43/44, `/dev/ttyUSB0`) is reserved for display telemetry JSON (Phase 6) — do not use it for micro-ROS.
+- `pub_odom` and `pub_imu` must use `rclc_publisher_init_default` (RELIABLE), not BEST_EFFORT. `nav_msgs/Odometry` is ~712 bytes serialized — exceeds the 512-byte XRCE MTU and is silently dropped on BEST_EFFORT streams.
 - Never change serial device, encoder pins, motor polarity, or controller YAML all at once during debugging. Change one thing, observe, repeat.
 - If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart robot-launch.service`.
 
@@ -503,11 +511,11 @@ The full step-by-step build plan — with files to create, implementation detail
 ls /dev/rplidar
 ls /dev/serial/by-id/usb-Espressif*
 
-# micro-ROS agent (Serial1 UART via USB adapter)
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
+# micro-ROS agent (native USB CDC)
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 
-# Monitor display telemetry stream (Serial0 USB CDC)
-cat /dev/ttyACM0
+# Monitor display telemetry stream (CH340 UART0 — Phase 6 only)
+cat /dev/ttyUSB0
 
 # Topic health
 ros2 topic hz /diff_cont/odom

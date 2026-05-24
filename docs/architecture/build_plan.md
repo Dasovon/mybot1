@@ -16,8 +16,8 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 
 | Phase | Status |
 |---|---|
-| 0 — Hardware & Environment | In progress (Step 14 bench test pending) |
-| 1 — ESP32 Firmware | Firmware written — pending hardware validation |
+| 0 — Hardware & Environment | Complete |
+| 1 — ESP32 Firmware | Partial — micro-ROS topics validated (odom 30 Hz, battery 1 Hz); sensors/motors not yet wired. See [`docs/testing/phase1_firmware_validation_2026-05-24.md`](../testing/phase1_firmware_validation_2026-05-24.md) |
 | 2 — ROS 2 Foundation (URDF + TF) | Not started |
 | 3 — Sensor Bridge & EKF | Not started |
 | 4 — SLAM | Not started |
@@ -1108,6 +1108,8 @@ ros2 topic hz /battery_state --window 30   # must hold ~1 Hz, no dropouts
 If `/battery_state` drops out or pauses while motors run, the battery task is sharing execution context with the motor/PID loop — fix the FreeRTOS task structure before proceeding.
 
 Phase 1 is complete when all checks above pass, including the battery isolation check.
+
+**Session log (2026-05-24):** micro-ROS transport, baud rate, and QoS issues resolved. odom at 30 Hz and battery at 1 Hz confirmed on bare hardware. Sensors/motors not yet wired. See [`docs/testing/phase1_firmware_validation_2026-05-24.md`](../testing/phase1_firmware_validation_2026-05-24.md) for the full issue log and transport configuration details.
 
 ---
 

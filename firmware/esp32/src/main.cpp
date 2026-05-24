@@ -51,9 +51,6 @@ static uint32_t last_bat_pub_ms  = 0;  // 1 Hz   (battery)
 // setup
 // ---------------------------------------------------------------------------
 void setup() {
-    // Serial0 (USB CDC, GPIO 19/20) — display telemetry JSON to Pi /dev/ttyACM0
-    Serial.begin(115200);
-
     // I2C mutex — must be created before battery_task is started
     g_i2c_mutex = xSemaphoreCreateMutex();
 
@@ -62,11 +59,10 @@ void setup() {
 
     // imu_init() calls Wire.begin(8, 9) — initialises shared I2C bus
     if (!imu_init()) {
-        Serial.println("{\"err\":\"BNO055 init failed\"}");
+        // BNO055 init failed — micro-ROS IMU topic will not publish
     }
-    // battery_init() assumes Wire is already up
     if (!battery_init()) {
-        Serial.println("{\"err\":\"INA219 init failed\"}");
+        // INA219 init failed — battery topic will not publish
     }
 
     // Battery task on Core 0 — isolated from PID/micro-ROS on Core 1.
@@ -81,7 +77,6 @@ void setup() {
     last_pub_ms     = now;
     last_bat_pub_ms = now;
 
-    Serial.println("{\"info\":\"mybot1 boot ok\"}");
 }
 
 // ---------------------------------------------------------------------------
@@ -161,20 +156,11 @@ void loop() {
     }
 
     // -----------------------------------------------------------------------
-    // 1 Hz — battery publish + display telemetry JSON on Serial0
+    // 1 Hz — battery publish via micro-ROS
     // -----------------------------------------------------------------------
     if (now - last_bat_pub_ms >= 1000) {
         last_bat_pub_ms = now;
-
         microros_publish_battery(g_battery.voltage_v, g_battery.current_ma);
-
-        // JSON to Serial0 for display daemon (format matches display_daemon.py expectation)
-        Serial.printf("{\"v\":%.2f,\"i\":%.3f,\"p\":%.2f,\"ok\":%d,\"ts\":%lu}\n",
-                      (double)g_battery.voltage_v,
-                      (double)(g_battery.current_ma / 1000.0f),
-                      (double)(g_battery.power_mw   / 1000.0f),
-                      (int)g_battery.ok,
-                      (unsigned long)now);
     }
 
     // -----------------------------------------------------------------------
