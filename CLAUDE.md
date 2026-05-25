@@ -553,3 +553,42 @@ The robot is considered minimally operational when it can:
 | micro-ROS agent | Built from source in `~/microros_ws` (jazzy branch) |
 | Python | 3.12+ for ROS nodes |
 | Dev PC GPU | NVIDIA RTX preferred for YOLO / point cloud processing |
+
+---
+
+## Audit Notes (2026-05-25)
+
+Issues found during static audit of the repo. Not yet fixed — tracked here until resolved.
+
+### Critical — will cause wiring mistakes or runtime failures
+
+**README.md GPIO table reflects TB6612FNG pinout, not Cytron MDD10A**
+The README motor section was written for the Adafruit TB6612FNG (currently installed as a temporary substitute while the Cytron MDD10A is in transit). The TB6612FNG requires 6 GPIO pins per motor pair (PWMA, AIN1, AIN2, PWMB, BIN1, BIN2 on GPIOs 10–15). The firmware (`motors.h`, `motors.cpp`) is written for the Cytron MDD10A's 4-pin PWM+DIR interface (GPIOs 10–13). These are electrically incompatible: when the firmware drives DIR=LOW for reverse, the TB6612FNG sees AIN1=LOW with AIN2 floating/undefined, which produces brake rather than reverse. **Motor control will not work correctly with the TB6612FNG until `motors.cpp` is updated for AIN1/AIN2/BIN1/BIN2.** When the Cytron MDD10A arrives, update `README.md` to replace the TB6612FNG entry and correct the GPIO table.
+
+**README.md GPIO 19/20 mislabeled as micro-ROS**
+`README.md` line 75 says `GPIO 19/20 — Native USB (micro-ROS to Pi)`. This is wrong. GPIO 19/20 is Serial0 USB CDC used for **display telemetry** (`/dev/ttyACM0`). micro-ROS runs on GPIO 17/18 (Serial1 UART) via `/dev/ttyUSB0`. GPIO 17/18 is missing from the README GPIO table entirely.
+
+### High — incorrect information that will confuse development
+
+**README.md OS and ROS versions are stale**
+`README.md` lines 34–35 say `Ubuntu 22.04 LTS` and `ROS 2 Humble Hawksbill`. The project targets **Ubuntu 24.04 LTS** and **ROS 2 Jazzy Jalisco**. Every other doc in the repo is correct.
+
+**`docs/hardware/development_pc.md` has two errors in the software stack table**
+- Line 26: `Ubuntu | 22.04 LTS` — should be **24.04 LTS** (contradicts line 18 of the same file).
+- Line 27: `ROS 2 | Jazzy Hawksbill` — the release name is **Jazzy Jalisco** (Hawksbill comes from Humble Hawksbill; the names were mixed).
+
+**`docs/architecture/autonomous_robot_system_specification_v1.md` line 513 — wrong Pi OS**
+States `Raspberry Pi OS Trixie (Pi)`. The Pi runs **Ubuntu Server 24.04 LTS**, not Raspberry Pi OS.
+
+### Warning — code quality / maintainability
+
+**`firmware/esp32/src/motors.cpp` uses deprecated arduino-esp32 2.x LEDC API**
+`ledcSetup()` and `ledcAttachPin()` are the 2.x API. `platformio.ini` pins `espressif32@^6.8.0` which bundles arduino-esp32 **3.2.x**, where these are deprecated. The code compiles via backwards-compat shims but generates warnings and is one platform upgrade away from breaking. The 3.x replacements are `ledcAttach(pin, freq, resolution)` and `ledcWrite(pin, duty)`.
+
+**`firmware/esp32/include/encoders.h` line 11 — inaccurate CPR derivation comment**
+Comment says `"2x quadrature decoding (PCNT half-quad mode) of 11 PPR motor encoder through 45:1 gearbox"`. 11 × 2 × 45 = 990, not 1010. The constant `ENC_CPR = 1010` is correct (floor-validated); the 11 PPR figure in the comment is slightly off.
+
+### Info — missing required documentation
+
+**Five of six ROS packages missing `README.md`** (required by project standards)
+Missing from: `esp32_serial_bridge`, `robot_bringup`, `robot_navigation`, `robot_slam`, `robot_msgs`. Only `robot_description` has one.
