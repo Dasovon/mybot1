@@ -565,7 +565,7 @@ The robot is considered minimally operational when it can:
 
 ---
 
-## Audit Notes (2026-05-25)
+## Audit Notes (2026-05-24)
 
 Issues found during static audit of the repo. Not yet fixed — tracked here until resolved.
 
