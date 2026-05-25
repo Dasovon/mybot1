@@ -4,8 +4,8 @@ After=multi-user.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=dialout
+User=root
+WorkingDirectory=/tmp
 ExecStart=/usr/bin/python3 /home/ubuntu/bot_ws/scripts/display_daemon.py
 Restart=always
 RestartSec=5

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-OLED display daemon for mybot1.
-Runs as a ROS2-independent systemd service on the Pi.
-Shows system stats (always) + ESP32 battery telemetry (when available).
+OLED display daemon for mybot1 — ROS2-independent systemd service.
+Reads Pi system stats via psutil and ESP32 battery telemetry via
+CH340 UART (/dev/ttyUSB0, 9600 baud) when the second USB cable is
+connected. Works at boot, during ROS2 crashes, and during reflashing.
 
 Display: Waveshare 2.42" SSD1309, 128x64, SPI0
-ESP32 JSON source: /dev/ttyUSB0 (CH340 UART0, 9600 baud), format:
-    {"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
+GPIO: DC=GPIO25, RST=GPIO27 (BCM, gpiochip4 on Pi 5)
+ESP32 JSON: {"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
 """
 
 import json
@@ -20,18 +21,19 @@ from luma.core.interface.serial import spi
 from luma.oled.device import ssd1309
 from PIL import Image, ImageDraw, ImageFont
 
-# SPI pins (BCM numbering)
-GPIO_DC  = 25
-GPIO_RST = 27
-SPI_PORT = 0
-SPI_DEV  = 0
+GPIO_DC   = 25
+GPIO_RST  = 27
+SPI_PORT  = 0
+SPI_DEV   = 0
+GPIOCHIP  = 4
+UPDATE_HZ = 2
 
-# Pi 5 main GPIO is on gpiochip4
-GPIOCHIP = 4
+SERIAL_PORT = '/dev/ttyUSB0'
+SERIAL_BAUD = 9600
 
 
 class LGPIOAdapter:
-    """Minimal RPi.GPIO-compatible adapter using lgpio for Pi 5."""
+    """Minimal RPi.GPIO-compatible adapter using lgpio for Pi 5 (gpiochip4)."""
     BCM = 11
     OUT = 0
     HIGH = 1
@@ -41,7 +43,7 @@ class LGPIOAdapter:
         self._handle = lgpio.gpiochip_open(GPIOCHIP)
 
     def setmode(self, mode):
-        pass  # lgpio uses chip/line addressing, no mode concept
+        pass
 
     def setup(self, pin, mode):
         lgpio.gpio_claim_output(self._handle, pin)
@@ -52,30 +54,16 @@ class LGPIOAdapter:
     def cleanup(self):
         lgpio.gpiochip_close(self._handle)
 
-SERIAL_PORT = '/dev/ttyUSB0'
-SERIAL_BAUD = 9600
-UPDATE_HZ   = 2
-
-
-def get_ip() -> str:
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return '?.?.?.?'
-
 
 class SerialReader:
-    """Reads ESP32 JSON telemetry from CH340 UART in a background thread."""
+    """Reads ESP32 JSON telemetry from CH340 UART in a background thread.
+    Reconnects automatically if the cable is unplugged/replugged.
+    """
 
     def __init__(self):
         self.data = {}
         self.connected = False
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
         while True:
@@ -94,52 +82,67 @@ class SerialReader:
                 time.sleep(5)
 
 
+def get_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '?.?.?.?'
+
+
 def render(device, esp: SerialReader):
     try:
-        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 11)
+        font    = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 11)
         font_sm = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 10)
     except IOError:
-        font = ImageFont.load_default()
+        font    = ImageFont.load_default()
         font_sm = font
 
     while True:
-        img = Image.new('1', (device.width, device.height), 0)
+        img  = Image.new('1', (device.width, device.height), 0)
         draw = ImageDraw.Draw(img)
 
-        cpu   = psutil.cpu_percent(interval=None)
-        ram   = psutil.virtual_memory().percent
-        temp  = psutil.sensors_temperatures().get('cpu_thermal', [{}])[0]
-        temp_c = temp.current if hasattr(temp, 'current') else 0.0
-        ip    = get_ip()
+        cpu    = psutil.cpu_percent(interval=None)
+        ram    = psutil.virtual_memory().percent
+        temps  = psutil.sensors_temperatures().get('cpu_thermal', [])
+        temp_c = temps[0].current if temps else 0.0
+        ip     = get_ip()
 
         # Line 1: IP address
-        draw.text((0, 0),  f'{ip}', font=font, fill=1)
+        draw.text((0,  0), ip, font=font, fill=1)
 
-        # Line 2: CPU + temp
-        draw.text((0, 14), f'CPU:{cpu:4.0f}%  {temp_c:.0f}C', font=font, fill=1)
+        # Line 2: CPU + temperature
+        draw.text((0, 13), f'CPU:{cpu:4.0f}%  {temp_c:.0f}C', font=font, fill=1)
 
         # Line 3: RAM
-        draw.text((0, 27), f'RAM:{ram:4.0f}%', font=font, fill=1)
+        draw.text((0, 26), f'RAM:{ram:4.0f}%', font=font, fill=1)
 
-        # Line 4: battery (ESP32 JSON) or placeholder
+        # Line 4: battery from ESP32 CH340 JSON
         if esp.connected and esp.data:
             v = esp.data.get('v', 0.0)
             i = esp.data.get('i', 0.0)
             p = esp.data.get('p', 0.0)
-            draw.text((0, 40), f'{v:.2f}V {i:.2f}A {p:.1f}W', font=font_sm, fill=1)
+            draw.text((0, 39), f'{v:.1f}V {i:.2f}A {p:.1f}W', font=font_sm, fill=1)
+        elif esp.connected:
+            draw.text((0, 39), 'Batt: no sensor', font=font_sm, fill=1)
         else:
-            draw.text((0, 40), f'ESP32: no data', font=font_sm, fill=1)
+            draw.text((0, 39), 'Batt: no USB', font=font_sm, fill=1)
 
-        # Line 5: status bar
-        status = 'ROS:?'
-        draw.text((0, 53), status, font=font_sm, fill=1)
+        # Line 5: uptime
+        uptime_s = int(time.monotonic())
+        h, m = divmod(uptime_s // 60, 60)
+        draw.text((0, 52), f'up {h}h{m:02d}m', font=font_sm, fill=1)
 
         device.display(img)
         time.sleep(1.0 / UPDATE_HZ)
 
 
 def main():
-    serial_obj = spi(device=SPI_DEV, port=SPI_PORT, gpio_DC=GPIO_DC, gpio_RST=GPIO_RST,
+    serial_obj = spi(device=SPI_DEV, port=SPI_PORT,
+                     gpio_DC=GPIO_DC, gpio_RST=GPIO_RST,
                      gpio=LGPIOAdapter())
     device = ssd1309(serial_obj, width=128, height=64)
     device.contrast(128)
