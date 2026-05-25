@@ -1,10 +1,12 @@
 #pragma once
 
-// Default gains — tune on hardware after Phase 0 bench verification.
-// Input and output are both in rad/s.
-#define PID_KP_DEFAULT  2.0f
-#define PID_KI_DEFAULT  0.5f
-#define PID_KD_DEFAULT  0.02f
+// Default gains — scaled from dev_ws articubot_one validated values
+// (KP=55, KI=15 in PWM units) to mybot1's rad/s output architecture
+// (divides by MOTOR_MAX_RAD_S=19.9 before writing duty).
+// KP = 55 * 19.9 / 255 ≈ 4.3, KI = 15 * 19.9 / 255 ≈ 1.2
+#define PID_KP_DEFAULT  4.3f
+#define PID_KI_DEFAULT  1.2f
+#define PID_KD_DEFAULT  0.0f
 
 class PIDController {
 public:

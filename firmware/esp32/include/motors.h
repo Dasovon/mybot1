@@ -1,13 +1,14 @@
 #pragma once
 #include <Arduino.h>
 
-// Cytron MDD10A — PWM + DIR per channel
-// Ch1 = right side (front + rear motors in parallel)
-// Ch2 = left side  (front + rear motors in parallel)
-#define MOTOR_R_PWM   10   // LEDC ch 0, 20 kHz, 8-bit
-#define MOTOR_R_DIR   11
-#define MOTOR_L_PWM   12   // LEDC ch 1, 20 kHz, 8-bit
-#define MOTOR_L_DIR   13
+// TB6612FNG — PWM + IN1 + IN2 per channel (articubot_one test hardware)
+// Motor A = RIGHT side, Motor B = LEFT side
+#define MOTOR_R_PWM   10   // PWMA — LEDC ch 0, 20 kHz, 8-bit
+#define MOTOR_R_IN1   11   // AIN1
+#define MOTOR_R_IN2   12   // AIN2
+#define MOTOR_L_PWM   13   // PWMB — LEDC ch 1, 20 kHz, 8-bit
+#define MOTOR_L_IN1   14   // BIN1
+#define MOTOR_L_IN2   15   // BIN2
 
 #define MOTOR_PWM_FREQ  20000   // 20 kHz — inaudible switching
 #define MOTOR_PWM_BITS  8       // 0–255 range
