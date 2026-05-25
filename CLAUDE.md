@@ -35,8 +35,8 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone bu
 | Power | EP-0225 (52pi) | DC barrel 9–24V → 5V/8A USB PD to Pi | Pi |
 | Compute (Pi) | Raspberry Pi 5 | USB PD power, USB-A devices, Ethernet/Wi-Fi | Pi |
 | Microcontroller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | Native USB CDC (GPIO 19/20) → Pi `/dev/ttyACM0` (micro-ROS + flashing) \| CH340 UART0 (GPIO 43/44) → Pi `/dev/ttyUSB0` (display telemetry, Phase 6) | ESP32 |
-| Motor driver | Cytron MDD10A (dual channel 10A) | GPIO 10–13 (PWM + DIR) — **not yet wired** | ESP32 |
-| Motors + encoders | 4× JGA25-371 DC 12V, 45:1 gear ratio (skid steer, 2 per side) | GPIO 39–42 (quadrature, 1010 CPR, one encoder per side) — **not yet wired** | ESP32 |
+| Motor driver | TB6612FNG (dual channel) — **temporary; will upgrade to larger driver + 2 more wheels** | GPIO 10–15 (PWMA, AIN1, AIN2, PWMB, BIN1, BIN2) | ESP32 |
+| Motors + encoders | 4× JGA25-371 DC 12V, 45:1 gear ratio (skid steer, 2 per side) | GPIO 39–42 (quadrature, 1010 CPR, one encoder per side) | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
 | Battery monitor | Adafruit INA219 breakout | I2C GPIO 8/9, addr 0x40 | ESP32 |
 | Env sensor | BME680 breakout | I2C GPIO 8/9, addr 0x76 — **not yet wired** | ESP32 |
@@ -50,7 +50,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone bu
 
 ```
 Battery (9–24V DC, e.g. 3S LiPo ~12V)
-    ├── [10A inline fuse]  →  Cytron MDD10A VIN  (raw battery voltage, motor power)
+    ├── [10A inline fuse]  →  TB6612FNG VM  (raw battery voltage, motor power)
     └── [3A inline fuse]  →  Master power switch
               └── EP-0225 (52pi) INPUT (DC barrel)
                       ├── OUTPUT USB-C  →  Raspberry Pi 5 (5.15V / 5A, USB PD 3.0)
@@ -60,13 +60,13 @@ Battery (9–24V DC, e.g. 3S LiPo ~12V)
                       │       └── Pi USB-A  →  RealSense D435  (power + data, USB 3.0)
                       └── VIN screw terminal  →  (tied to barrel jack input — do not double-connect)
 
-Cytron MDD10A logic VCC  →  ESP32 3V3 pin
-Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all one rail.
+TB6612FNG VCC (logic)  →  ESP32 3V3 pin
+Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, TB6612FNG GND — all one rail.
 ```
 
 **Fuse sizing rationale:**
 - Logic rail (EP-0225 input): 3A — Pi 5 draws up to 5A at 5V ≈ 2.1A at 12V; 3A gives margin without masking real faults
-- Motor rail (MDD10A VIN): 10A — 4× JGA25-371 rated 750 mA each (stall), plus MDD10A quiescent draw; 10A covers stall condition
+- Motor rail (TB6612FNG VM): 10A — 4× JGA25-371 rated 750 mA each (stall); 10A covers stall condition
 
 **Master power switch:** Inline between battery and EP-0225 barrel jack. Kills logic rail (Pi + ESP32) without disturbing motor rail fuse. Safe to work on robot with switch off; motor fuse remains in place as always-on protection.
 
@@ -80,12 +80,12 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all o
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWM_R — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → Cytron MDD10A Ch1 |
-| 11 | DIR_R — Right side direction → Cytron MDD10A Ch1 |
-| 12 | PWM_L — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → Cytron MDD10A Ch2 |
-| 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
-| 14 | (free) |
-| 15 | (free) |
+| 10 | PWMA — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → TB6612FNG PWMA |
+| 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
+| 12 | AIN2 — Right side direction 2 → TB6612FNG AIN2 |
+| 13 | PWMB — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → TB6612FNG PWMB |
+| 14 | BIN1 — Left side direction 1 → TB6612FNG BIN1 |
+| 15 | BIN2 — Left side direction 2 → TB6612FNG BIN2 |
 | 17 | (free — UART1 not used for micro-ROS; CH340 connects to UART0 GPIO 43/44) |
 | 18 | (free) |
 | 19, 20 | Native USB D−/D+ — micro-ROS transport + flashing → Pi `/dev/ttyACM0` |
@@ -94,9 +94,9 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, MDD10A GND — all o
 | 41 | Left encoder B (read in ISR) ⚠️ EMI |
 | 42 | Right encoder A — `attachInterrupt` CHANGE |
 
-**Right side (Ch1) = front_right + rear_right motors in parallel. Left side (Ch2) = front_left + rear_left motors in parallel.**
+**Right side = front_right + rear_right motors in parallel. Left side = front_left + rear_left motors in parallel.**
 
-⚠️ **GPIO 40/41 EMI:** Left encoder picks up MDD10A 20 kHz PWM switching noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
+⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612FNG 20 kHz PWM switching noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
 
 **Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED on DevKitC-1 — but Lonely Binary uses GPIO 48 for RGB LED), 43/44 (UART0 / CH340), 0/45/46 (strapping pins).
 GPIO 19/20 = native USB CDC (micro-ROS + flashing — do not repurpose). GPIO 43/44 = UART0 via CH340 (display telemetry Phase 6).
@@ -567,15 +567,15 @@ The robot is considered minimally operational when it can:
 
 ## Audit Notes (2026-05-24)
 
-Issues found during static audit of the repo. Not yet fixed — tracked here until resolved.
+Issues found during static audit of the repo. Items resolved are noted inline.
 
 ### Critical — will cause wiring mistakes or runtime failures
 
-**README.md GPIO table reflects TB6612FNG pinout, not Cytron MDD10A**
-The README motor section was written for the Adafruit TB6612FNG (currently installed as a temporary substitute while the Cytron MDD10A is in transit). The TB6612FNG requires 6 GPIO pins per motor pair (PWMA, AIN1, AIN2, PWMB, BIN1, BIN2 on GPIOs 10–15). The firmware (`motors.h`, `motors.cpp`) is written for the Cytron MDD10A's 4-pin PWM+DIR interface (GPIOs 10–13). These are electrically incompatible: when the firmware drives DIR=LOW for reverse, the TB6612FNG sees AIN1=LOW with AIN2 floating/undefined, which produces brake rather than reverse. **Motor control will not work correctly with the TB6612FNG until `motors.cpp` is updated for AIN1/AIN2/BIN1/BIN2.** When the Cytron MDD10A arrives, update `README.md` to replace the TB6612FNG entry and correct the GPIO table.
+**~~README.md GPIO table reflects TB6612FNG pinout, not Cytron MDD10A~~** ✅ RESOLVED 2026-05-25
+TB6612FNG is now the confirmed current motor driver. Firmware (motors.h/cpp) and CLAUDE.md GPIO table updated to match. Future upgrade to a larger driver + 2 additional wheels is planned.
 
-**README.md GPIO 19/20 mislabeled as micro-ROS**
-`README.md` line 75 says `GPIO 19/20 — Native USB (micro-ROS to Pi)`. This is wrong. GPIO 19/20 is Serial0 USB CDC used for **display telemetry** (`/dev/ttyACM0`). micro-ROS runs on GPIO 17/18 (Serial1 UART) via `/dev/ttyUSB0`. GPIO 17/18 is missing from the README GPIO table entirely.
+**~~README.md GPIO 19/20 mislabeled as micro-ROS~~** ✅ RESOLVED 2026-05-24
+GPIO 19/20 = native USB CDC = micro-ROS on `/dev/ttyACM0` (this is correct). GPIO 43/44 = CH340 UART0 = display telemetry on `/dev/ttyUSB0`. Rules files corrected.
 
 ### High — incorrect information that will confuse development
 

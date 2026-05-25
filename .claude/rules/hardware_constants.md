@@ -8,12 +8,12 @@
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWM_R — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → Cytron MDD10A Ch1 |
-| 11 | DIR_R — Right side direction → Cytron MDD10A Ch1 |
-| 12 | PWM_L — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → Cytron MDD10A Ch2 |
-| 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
-| 14 | (free) |
-| 15 | (free) |
+| 10 | PWMA — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → TB6612FNG PWMA |
+| 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
+| 12 | AIN2 — Right side direction 2 → TB6612FNG AIN2 |
+| 13 | PWMB — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → TB6612FNG PWMB |
+| 14 | BIN1 — Left side direction 1 → TB6612FNG BIN1 |
+| 15 | BIN2 — Left side direction 2 → TB6612FNG BIN2 |
 | 17 | (free) |
 | 18 | (free) |
 | 19, 20 | Native USB D−/D+ → Pi `/dev/ttyACM0` — micro-ROS transport + flashing (921600 baud) |
@@ -24,7 +24,7 @@
 | 41 | Left encoder B ⚠️ EMI — 100 nF cap to GND required |
 | 42 | Right encoder A |
 
-**Right side (Ch1) = front_right + rear_right motors in parallel. Left side (Ch2) = front_left + rear_left motors in parallel.**
+**Right side = front_right + rear_right motors in parallel. Left side = front_left + rear_left motors in parallel. TB6612FNG is temporary — future upgrade to larger driver + 2 more wheels planned.**
 
 GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38/48 (RGB LED), 43/44 (UART0/CH340 — display telemetry), 0/45/46 (strapping).
 
