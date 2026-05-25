@@ -17,7 +17,7 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 | Phase | Status |
 |---|---|
 | 0 — Hardware & Environment | Complete |
-| 1 — ESP32 Firmware | Partial — micro-ROS topics validated (odom 30 Hz, battery 1 Hz); sensors/motors not yet wired. See [`docs/testing/phase1_firmware_validation_2026-05-24.md`](../testing/phase1_firmware_validation_2026-05-24.md) |
+| 1 — ESP32 Firmware | **Complete** — all gate checks pass. IMU 30 Hz, encoders correct direction, motors forward, watchdog fires. PID gains need tuning before Phase 2 odom accuracy matters. See [`docs/testing/phase1_motor_validation_2026-05-25.md`](../testing/phase1_motor_validation_2026-05-25.md) |
 | 2 — ROS 2 Foundation (URDF + TF) | Not started |
 | 3 — Sensor Bridge & EKF | Not started |
 | 4 — SLAM | Not started |
