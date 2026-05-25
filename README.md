@@ -31,8 +31,8 @@ A distributed ROS 2 autonomous mobile robot (AMR) built on a proven hardware sta
 
 | Component | Version |
 |---|---|
-| OS | Ubuntu 22.04 LTS |
-| ROS | ROS 2 Humble Hawksbill |
+| OS | Ubuntu 24.04 LTS |
+| ROS | ROS 2 Jazzy Jalisco |
 | SLAM | slam_toolbox (current) / RTAB-Map (future) |
 | Navigation | Nav2 |
 | Localization | robot_localization (EKF) |

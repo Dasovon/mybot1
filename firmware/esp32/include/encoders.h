@@ -8,8 +8,8 @@
 #define ENC_R_B  39
 
 // Validated on floor: 3 runs averaged 1010 counts per wheel revolution.
-// Corresponds to 2x quadrature decoding (PCNT half-quad mode) of 11 PPR motor
-// encoder through 45:1 gearbox.
+// 2× quadrature (PCNT half-quad) through 45:1 gearbox. Use the floor-measured
+// value — theoretical PPR derivation does not match exactly.
 #define ENC_CPR  1010
 
 // Uses ESP32-S3 PCNT hardware peripheral via ESP32Encoder library.
