@@ -95,7 +95,7 @@ Left encoder (GPIO 40/41) picks up TB6612 20 kHz PWM switching noise. Two mitiga
 
 ## BNO055 on ESP32-S3 compatibility
 
-Requires **arduino-esp32 ≥ 3.2.0** (espressif32 ≥ 6.3.0, ESP-IDF ≥ 5.4.0). Earlier versions have an I2C clock-stretching bug that makes BNO055 unreliable. Do NOT use arduino-esp32 3.3.6+ — it has a UART regression that breaks `Serial1.begin()` with custom GPIO pins (affects micro-ROS on GPIO 17/18). Pin in platformio.ini:
+Requires **arduino-esp32 ≥ 3.2.0** (espressif32 ≥ 6.3.0, ESP-IDF ≥ 5.4.0). Earlier versions have an I2C clock-stretching bug that makes BNO055 unreliable. Do NOT use arduino-esp32 3.3.6+ — it has a UART regression that can affect custom UART pin assignment. Pin in platformio.ini:
 ```ini
 platform = espressif32@^6.8.0
 ```
@@ -106,18 +106,22 @@ The OLED display daemon is a **ROS2-independent systemd service** on the Pi, not
 
 - Source: `scripts/display_daemon.py`
 - Service: `scripts/mybot-display.service`
-- Reads Serial0 JSON from `/dev/ttyACM0` at 2 Hz
+- Reads CH340 JSON from `/dev/ttyUSB0` at 9600 baud (ESP32 UART0, GPIO 43/44)
 - Renders via luma.oled over SPI0 to Waveshare 2.42" OLED (SSD1309)
+- Pi 5 requires `LGPIOAdapter` (lgpio, gpiochip4) instead of RPi.GPIO — already implemented
+- Service `WorkingDirectory=/tmp` required (lgpio creates notification pipes in CWD)
 
 ## Common debugging commands
 
 ```bash
 # Verify devices on Pi
 ls /dev/rplidar
-ls /dev/serial/by-id/usb-Espressif*
+ls /dev/serial/by-id/usb-Espressif*    # ESP32 native USB (ttyACM0)
+lsusb | grep 1a86                        # CH340 (ttyUSB0) — needs data-capable cable
 
-# micro-ROS agent (Serial1 UART via ttyUSB0)
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
+# micro-ROS agent (native USB CDC → ttyACM0)
+source /opt/ros/jazzy/setup.bash && source ~/microros_ws/install/setup.bash
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 
 # Topic health
 ros2 topic hz /diff_cont/odom
@@ -125,15 +129,17 @@ ros2 topic hz /imu/imu
 ros2 topic hz /scan
 ros2 topic echo /battery_state
 
-# Display daemon monitor
-cat /dev/ttyACM0
+# Monitor CH340 display telemetry stream (stop display daemon first to avoid port conflict)
+sudo systemctl stop mybot-display.service
+sudo cat /dev/ttyUSB0
+
+# Display daemon
+sudo systemctl status mybot-display.service
+sudo systemctl restart mybot-display.service
 
 # TF debugging
 ros2 run tf2_tools view_frames
 ros2 run tf2_ros tf2_echo base_link laser
-
-# I2C sensor check (on ESP32 I2C bus via Pi serial)
-# expect: 0x28 (BNO055), 0x40 (INA219)
 
 # LiDAR stale process fix
 sudo fuser -k /dev/rplidar

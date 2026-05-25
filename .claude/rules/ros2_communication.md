@@ -122,17 +122,20 @@ Import in C++: `#include "robot_msgs/msg/battery_status.hpp"`
 
 ## Serial transport (ESP32 ↔ Pi) — dual port
 
-| Port | Device | Purpose |
-|---|---|---|
-| Serial1 UART (GPIO 17 TX / 18 RX) | `/dev/ttyUSB0` | micro-ROS (RELIABLE, mission-critical) |
-| Serial0 native USB CDC | `/dev/ttyACM0` | Display telemetry JSON at 2 Hz |
+| Port | ESP32 | Pi device | Purpose |
+|---|---|---|---|
+| Native USB CDC | GPIO 19/20 (built-in USB-JTAG, VID 303a:1001) | `/dev/ttyACM0` | micro-ROS transport + flashing (921600 baud) |
+| CH340 UART0 | GPIO 43 TX / 44 RX (Lonely Binary on-board CH340, VID 1a86:7522) | `/dev/ttyUSB0` | Display telemetry JSON at 2 Hz (9600 baud) |
 
 micro-ROS agent command:
 ```bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
+source /opt/ros/jazzy/setup.bash && source ~/microros_ws/install/setup.bash
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 ```
 
-Serial0 JSON format from ESP32:
+CH340 JSON format from ESP32 (sent every 500 ms via Serial0.print):
 ```json
 {"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
 ```
+
+Monitor raw CH340 stream: `sudo cat /dev/ttyUSB0`

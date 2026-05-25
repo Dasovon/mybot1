@@ -14,9 +14,11 @@
 | 13 | DIR_L — Left side direction → Cytron MDD10A Ch2 |
 | 14 | (free) |
 | 15 | (free) |
-| 17 | UART1 TX → USB-UART adapter → Pi `/dev/ttyUSB0` (micro-ROS Serial1) |
-| 18 | UART1 RX ← USB-UART adapter ← Pi `/dev/ttyUSB0` (micro-ROS Serial1) |
-| 19, 20 | Native USB D−/D+ — Serial0 display telemetry CDC to Pi `/dev/ttyACM0` |
+| 17 | (free) |
+| 18 | (free) |
+| 19, 20 | Native USB D−/D+ → Pi `/dev/ttyACM0` — micro-ROS transport + flashing (921600 baud) |
+| 43 | UART0 TX via Lonely Binary CH340 → Pi `/dev/ttyUSB0` — display telemetry JSON (9600 baud) |
+| 44 | UART0 RX via Lonely Binary CH340 ← Pi `/dev/ttyUSB0` |
 | 39 | Right encoder B |
 | 40 | Left encoder A ⚠️ EMI — 100 nF cap to GND required |
 | 41 | Left encoder B ⚠️ EMI — 100 nF cap to GND required |
@@ -24,7 +26,7 @@
 
 **Right side (Ch1) = front_right + rear_right motors in parallel. Left side (Ch2) = front_left + rear_left motors in parallel.**
 
-GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38 (RGB LED), 43/44 (UART0), 0/45/46 (strapping).
+GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38/48 (RGB LED), 43/44 (UART0/CH340 — display telemetry), 0/45/46 (strapping).
 
 ## I2C Addresses (ESP32 I2C bus, GPIO 8/9)
 
@@ -92,4 +94,6 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | micro-ROS + flashing | Native USB CDC, GPIO 19/20 | `/dev/ttyACM0` | Built-in USB-JTAG/Serial (303a:1001); 921600 baud; auto-reset via 1200bps touch |
 | Display telemetry (Phase 6) | Serial0 UART0, GPIO 43 TX / 44 RX | `/dev/ttyUSB0` | Lonely Binary on-board CH340 (1a86:7522); deferred |
 
-Required firmware build flag: `-DARDUINO_USB_CDC_ON_BOOT=1`
+Required firmware build flags: `-DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1 -DCORE_DEBUG_LEVEL=0`
+
+Note: `-DCORE_DEBUG_LEVEL=0` suppresses Arduino-level debug output to UART0, keeping the CH340 telemetry stream clean.
