@@ -4,6 +4,7 @@
 #include <freertos/semphr.h>
 
 #define BAT_ADDR      0x40
+#define BAT_FULL_V    12.6f   // 3S LiPo: full at 4.2V/cell
 #define BAT_WARN_V    10.5f   // 3S LiPo: warn at ~3.5V/cell
 #define BAT_CUTOFF_V   9.9f   // 3S LiPo: stop motors at ~3.3V/cell
 

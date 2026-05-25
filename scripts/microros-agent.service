@@ -1,0 +1,15 @@
+[Unit]
+Description=micro-ROS agent — ESP32 USB CDC serial bridge
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && source /home/ubuntu/microros_ws/install/setup.bash && exec ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600"
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

@@ -4,9 +4,9 @@ After=multi-user.target
 
 [Service]
 Type=simple
-User=root
+User=ubuntu
 WorkingDirectory=/tmp
-ExecStart=/usr/bin/python3 /home/ubuntu/bot_ws/scripts/display_daemon.py
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && exec python3 /home/ubuntu/bot_ws/scripts/display_daemon.py"
 Restart=always
 RestartSec=5
 

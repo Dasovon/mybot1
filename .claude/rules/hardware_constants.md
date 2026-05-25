@@ -92,7 +92,7 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | Role | ESP32 port | Pi device | Notes |
 |---|---|---|---|
 | micro-ROS + flashing | Native USB CDC, GPIO 19/20 | `/dev/ttyACM0` | Built-in USB-JTAG/Serial (303a:1001); 921600 baud; auto-reset via 1200bps touch |
-| Display telemetry (Phase 6) | Serial0 UART0, GPIO 43 TX / 44 RX | `/dev/ttyUSB0` | Lonely Binary on-board CH340 (1a86:7522); deferred |
+| Display telemetry | ROS2 `/battery_state` topic | n/a | Battery data via micro-ROS → display_daemon rclpy subscriber |
 
 Required firmware build flags: `-DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1 -DCORE_DEBUG_LEVEL=0`
 

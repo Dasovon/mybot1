@@ -483,6 +483,7 @@ The full step-by-step build plan — with files to create, implementation detail
 
 ### Rules for Claude Code
 
+- **Always run commands directly** — do not present shell commands and ask the user to run them. SSH to `ubuntu@pi5bot` for Pi commands, run `pio run` / `pio run --target upload` for firmware. The user expects Claude Code to execute, not narrate.
 - **Read `build_plan.md` before starting any implementation work.** It is the authoritative source for what to build next.
 - **Follow phases in order.** Do not implement Phase N+1 until Phase N's validation gate passes.
 - **Update the status table** in `build_plan.md` when a phase completes.

@@ -85,49 +85,53 @@ The display should cycle through: text, rectangles, ellipses, and a logo. This c
 
 ## Display Daemon
 
-The robot uses a **ROS2-independent display daemon**, not a ROS node. This is the key design choice: the OLED works at boot before ROS2 starts, during ROS2 crashes, and during ESP32 reflashing.
+The display daemon is a systemd service (`mybot-display.service`) running as `ubuntu` on the Pi. It is not a ROS node, but it does subscribe to the `/battery_state` ROS2 topic via rclpy to get live battery data. If ROS2 or the micro-ROS agent is not running, the daemon continues to display system stats and shows `no ROS2` in the battery row.
 
 ### How it works
 
 ```
-ESP32 Serial0 (USB CDC, /dev/ttyACM0)
-    → JSON stream: {"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
-        → display_daemon.py reads + parses
-            → renders 128×64 frame via luma.oled over SPI
-                → pushes to SSD1309 at 2 Hz
+micro-ROS agent (microros-agent.service)
+    → /battery_state topic (sensor_msgs/BatteryState) at 1 Hz
+        → display_daemon.py BatteryReader (rclpy subscriber, background thread)
+            → renders 128×64 frame via luma.oled over SPI at 2 Hz
+                → pushes to SSD1309
+System stats (hostname, IP, CPU, RAM, temperature) come from psutil — always available.
 ```
 
-System stats (CPU, RAM, IP) come from `psutil` — no ROS2 dependency.
+### Display layout (128×64, 5 rows)
 
-### Display layout
-
-| Line | Content | Source |
+| Row | Content | Source |
 |---|---|---|
-| 1 | IP address | psutil / socket |
-| 2 | Battery voltage + current | ESP32 Serial0 JSON |
-| 3 | Topic rates: `/diff_cont/odom`, `/scan` | psutil process check or ROS2 optional |
+| 1 | Hostname + IP address | socket / psutil |
+| 2 | Battery bar (visual, fills left-to-right) + % | `/battery_state` |
+| 3 | Voltage + current + Pi CPU temperature | `/battery_state` + psutil |
 | 4 | CPU % + RAM % | psutil |
+| 5 | ROS status (`ROS:OK` / `ROS:--`) + uptime | rclpy freshness check |
+
+When `/battery_state` data is fresh (< 3 s old): row 2 bar fills, row 3 shows live numbers, row 5 shows `ROS:OK`.
+When not fresh: bar is empty, row 3 shows `no ROS2  T:52C`, row 5 shows `ROS:--`.
 
 ### Files
 
 | File | Location | Purpose |
 |---|---|---|
-| `display_daemon.py` | `scripts/` | Main daemon — serial read, render, SPI push |
-| `mybot-display.service` | `scripts/` | systemd unit file |
+| `display_daemon.py` | `scripts/` | Main daemon — rclpy subscriber, psutil stats, SPI render |
+| `mybot-display.service` | `scripts/` | systemd unit for display daemon |
+| `microros-agent.service` | `scripts/` | systemd unit for micro-ROS agent (battery data source) |
 
 ### systemd service
 
 ```ini
 # scripts/mybot-display.service
 [Unit]
-Description=MyBot OLED Display Daemon
+Description=mybot1 OLED Display Daemon
 After=multi-user.target
 
 [Service]
 Type=simple
-User=ryan
-Group=dialout
-ExecStart=/usr/bin/python3 /home/ryan/bot_ws/scripts/display_daemon.py
+User=ubuntu
+WorkingDirectory=/tmp
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && exec python3 /home/ubuntu/bot_ws/scripts/display_daemon.py"
 Restart=always
 RestartSec=5
 
@@ -135,31 +139,18 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Install and enable:
+`WorkingDirectory=/tmp` is required — lgpio creates notification pipes in the working directory.
+`User=ubuntu` is required — FastDDS shared memory is user-scoped; the display daemon must run as the same user as the micro-ROS agent.
+
+Install and enable both services:
 ```bash
 sudo cp scripts/mybot-display.service /etc/systemd/system/
+sudo cp scripts/microros-agent.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable mybot-display.service
-sudo systemctl start mybot-display.service
-sudo systemctl status mybot-display.service   # should show active (running)
+sudo systemctl enable mybot-display.service microros-agent.service
+sudo systemctl start mybot-display.service microros-agent.service
+sudo systemctl status mybot-display.service microros-agent.service
 ```
-
-### Serial0 JSON format
-
-The ESP32 streams compact JSON over Serial0 at 2 Hz:
-```json
-{"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
-```
-
-| Key | Meaning |
-|---|---|
-| `v` | Bus voltage (V) |
-| `i` | Current (A) |
-| `p` | Power (W) |
-| `ok` | 1 = sensors healthy, 0 = I2C error |
-| `ts` | Timestamp (ms since boot) |
-
-> The ESP32 must have Serial0 publishing this format. This is implemented in Phase 6 firmware alongside the BME680 addition. Serial0 is separate from Serial1 (micro-ROS) — they run independently.
 
 ---
 

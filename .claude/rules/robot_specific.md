@@ -106,7 +106,7 @@ The OLED display daemon is a **ROS2-independent systemd service** on the Pi, not
 
 - Source: `scripts/display_daemon.py`
 - Service: `scripts/mybot-display.service`
-- Reads CH340 JSON from `/dev/ttyUSB0` at 9600 baud (ESP32 UART0, GPIO 43/44)
+- Reads battery JSON from `/dev/ttyUSB0` at 115200 baud — ESP32 UART0 (GPIO43/44) via Lonely Binary onboard CH340, UART USB-C port
 - Renders via luma.oled over SPI0 to Waveshare 2.42" OLED (SSD1309)
 - Pi 5 requires `LGPIOAdapter` (lgpio, gpiochip4) instead of RPi.GPIO — already implemented
 - Service `WorkingDirectory=/tmp` required (lgpio creates notification pipes in CWD)

@@ -1349,8 +1349,9 @@ BME680 environmental data streaming, RealSense depth integrated into Nav2 as a v
 | `firmware/esp32/include/env_sensor.h` | BME680 interface |
 | `src/robot_msgs/msg/EnvData.msg` | Custom message for BME680 data |
 | `src/robot_bringup/config/nav2_params.yaml` | Enable voxel_layer with RealSense |
-| `scripts/display_daemon.py` | Pi OLED display daemon — ROS2-independent, reads Serial0 JSON |
+| `scripts/display_daemon.py` | Pi OLED display daemon — reads `/battery_state` via rclpy, psutil for system stats |
 | `scripts/mybot-display.service` | systemd unit for display daemon |
+| `scripts/microros-agent.service` | systemd unit for micro-ROS agent (persistent, auto-restart) |
 
 ### Step-by-step
 
@@ -1367,26 +1368,34 @@ In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. S
 **Step 3 — OLED display daemon**
 Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md`. Enable SPI via `raspi-config`.
 
-The display is driven by a **ROS2-independent systemd daemon** (`scripts/display_daemon.py`), not a ROS node. It reads battery telemetry directly from the ESP32 Serial0 USB CDC stream (`/dev/ttyACM0`) and system stats via `psutil`. This means the OLED works at boot, during ROS2 crashes, and during reflashing — not dependent on ROS2 being up.
+The display is driven by a systemd daemon (`scripts/display_daemon.py`), not a ROS node. It subscribes to `/battery_state` via rclpy in a background thread and reads system stats via `psutil`. If ROS2 or the micro-ROS agent is down, it falls back gracefully and continues showing system stats with `ROS:--` in the status row.
 
-Display content (128×64):
-| Line | Content |
-|---|---|
-| 1 | IP address |
-| 2 | Battery voltage + current (from Serial0 JSON) |
-| 3 | Topic rates: `/diff_cont/odom`, `/scan` |
-| 4 | CPU % + RAM % |
+**Dependency:** `microros-agent.service` must also be deployed so the agent auto-restarts and provides the `/battery_state` feed on boot.
 
-Files to create:
-- `scripts/display_daemon.py` — reads `/dev/ttyACM0` JSON, renders via luma.oled over SPI at 2 Hz
-- `scripts/mybot-display.service` — systemd unit, starts at boot, restarts on failure, runs as user `ryan`
+Display layout (128×64, 5 rows at 9pt monospace):
+| Row | Content | Source |
+|---|---|---|
+| 1 | Hostname + IP address | socket / psutil |
+| 2 | Battery bar (visual fill) + % | `/battery_state` |
+| 3 | Voltage + current + Pi CPU temperature | `/battery_state` + psutil |
+| 4 | CPU % + RAM % | psutil |
+| 5 | `ROS:OK`/`ROS:--` + uptime | rclpy freshness |
+
+Files to deploy:
+- `scripts/display_daemon.py` — rclpy subscriber + psutil, renders via luma.oled over SPI at 2 Hz
+- `scripts/mybot-display.service` — `User=ubuntu`, `WorkingDirectory=/tmp`, sources ROS2 setup
+- `scripts/microros-agent.service` — `Restart=always`, `StartLimitIntervalSec=0`, `RestartSec=1`
 
 Install and enable:
 ```bash
 sudo cp scripts/mybot-display.service /etc/systemd/system/
-sudo systemctl enable mybot-display.service
-sudo systemctl start mybot-display.service
+sudo cp scripts/microros-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable mybot-display.service microros-agent.service
+sudo systemctl start mybot-display.service microros-agent.service
 ```
+
+> **Pi 5 lgpio note:** The lgd daemon creates pipe files in the working directory. `WorkingDirectory=/tmp` is required. Both services must run as `ubuntu` — FastDDS shared memory is user-scoped and the display daemon must share a user with the micro-ROS agent.
 
 Hardware reference: [`docs/hardware/oled_display.md`](../hardware/oled_display.md)
 
@@ -1397,7 +1406,8 @@ ros2 topic echo /env_data --once    # must show plausible temp/humidity/pressure
 ros2 topic hz /camera/depth/points  # still ~15 Hz
 # In RViz2: 3D obstacle visible in local costmap when object held in front of camera
 sudo systemctl status mybot-display.service   # must be active/running
-# OLED shows IP, battery voltage, topic rates, CPU — verify with ROS2 stopped too
+sudo systemctl status microros-agent.service  # must be active/running
+# OLED shows: hostname+IP, battery bar + %, voltage/current/temp, CPU/RAM, ROS:OK
 ```
 
 ---
