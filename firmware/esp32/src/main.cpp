@@ -46,6 +46,7 @@ static long prev_ticks_l = 0;
 static uint32_t last_control_ms  = 0;  // 100 Hz
 static uint32_t last_pub_ms      = 0;  // 30 Hz  (odom + IMU)
 static uint32_t last_bat_pub_ms  = 0;  // 1 Hz   (battery)
+static uint32_t last_telemetry_ms = 0; // 2 Hz   (CH340 display JSON)
 
 // ---------------------------------------------------------------------------
 // setup
@@ -53,6 +54,9 @@ static uint32_t last_bat_pub_ms  = 0;  // 1 Hz   (battery)
 void setup() {
     // I2C mutex — must be created before battery_task is started
     g_i2c_mutex = xSemaphoreCreateMutex();
+
+    // CH340 UART0 (GPIO 43 TX / 44 RX) → Pi /dev/ttyUSB0 — display telemetry JSON
+    Serial0.begin(9600);
 
     motors_init();
     encoders_init();
@@ -172,6 +176,23 @@ void loop() {
     if (now - last_bat_pub_ms >= 1000) {
         last_bat_pub_ms = now;
         microros_publish_battery(g_battery.voltage_v, g_battery.current_ma);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2 Hz — display telemetry JSON on CH340 UART0 → Pi /dev/ttyUSB0
+    // {"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
+    // -----------------------------------------------------------------------
+    if (now - last_telemetry_ms >= 500) {
+        last_telemetry_ms = now;
+        float v = g_battery.voltage_v;
+        float i = g_battery.current_ma / 1000.0f;
+        float p = g_battery.power_mw  / 1000.0f;
+        int   ok = g_battery.ok ? 1 : 0;
+        char buf[64];
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":%.2f,\"i\":%.2f,\"p\":%.2f,\"ok\":%d,\"ts\":%lu}\n",
+                 v, i, p, ok, (unsigned long)now);
+        Serial0.print(buf);
     }
 
     // -----------------------------------------------------------------------
