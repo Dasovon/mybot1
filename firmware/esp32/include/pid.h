@@ -1,11 +1,12 @@
 #pragma once
 
-// Default gains — scaled from dev_ws articubot_one validated values
-// (KP=55, KI=15 in PWM units) to mybot1's rad/s output architecture
-// (divides by MOTOR_MAX_RAD_S=19.9 before writing duty).
-// KP = 55 * 19.9 / 255 ≈ 4.3, KI = 15 * 19.9 / 255 ≈ 1.2
-#define PID_KP_DEFAULT  4.3f
-#define PID_KI_DEFAULT  1.2f
+// Gains scaled from dev_ws articubot_one (KP=55, KI=15 in PWM units) to
+// rad/s output architecture (divides by MOTOR_MAX_RAD_S before writing duty).
+// KP = 55 * MOTOR_MAX_RAD_S / 255, KI = 15 * MOTOR_MAX_RAD_S / 255.
+// MOTOR_MAX_RAD_S = 6.5 (measured on test chassis at 1 kHz PWM: ~0.218 m/s).
+// KP = 55 * 6.5 / 255 = 1.4, KI = 15 * 6.5 / 255 = 0.38
+#define PID_KP_DEFAULT  1.4f
+#define PID_KI_DEFAULT  0.38f
 #define PID_KD_DEFAULT  0.0f
 
 class PIDController {

@@ -10,12 +10,18 @@
 #define MOTOR_L_IN1   14   // BIN1
 #define MOTOR_L_IN2   15   // BIN2
 
-#define MOTOR_PWM_FREQ  20000   // 20 kHz — inaudible switching
+#define MOTOR_PWM_FREQ  1000    // 1 kHz — matches old articubot_one firmware; 20 kHz caused 10x speed loss
 #define MOTOR_PWM_BITS  8       // 0–255 range
 #define MOTOR_MAX_DUTY  255
 
-// Maximum no-load wheel speed: ~190 rpm → rad/s (same JGA25-371 motors)
-static constexpr float MOTOR_MAX_RAD_S = 19.9f;
+// Minimum duty to overcome gearbox stiction (~25% empirically on test chassis).
+// Applied when a non-zero target is active and PID output is below this floor.
+static constexpr float MOTOR_MIN_DUTY = 0.25f;
+
+// Measured no-load max on test chassis at 1 kHz PWM: ~0.218 m/s = 6.39 rad/s.
+// Lower than 190 RPM spec (19.9 rad/s) due to chassis gearbox friction.
+// Set slightly above measured max so PID can reach 100% duty at target.
+static constexpr float MOTOR_MAX_RAD_S = 6.5f;
 
 void motors_init();
 

@@ -119,10 +119,20 @@ void loop() {
             float tgt_r = (cmd_v + cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
             float tgt_l = (cmd_v - cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
 
-            // PID output in rad/s, mapped to [-1, 1] duty for motors
+            // PID output in rad/s, mapped to [-1, 1] duty for motors.
+            // Apply deadband floor: gearbox stiction requires MOTOR_MIN_DUTY to move.
             float out_r = pid_right.compute(tgt_r, meas_r);
             float out_l = pid_left.compute(tgt_l, meas_l);
-            motors_set_duty(out_r / MOTOR_MAX_RAD_S, out_l / MOTOR_MAX_RAD_S);
+            auto apply_floor = [](float out, float tgt) -> float {
+                float duty = out / MOTOR_MAX_RAD_S;
+                if (fabsf(tgt) < 0.01f) return duty;  // coast when target is zero
+                // Floor only in the target direction — reverse floor caused hard
+                // oscillation when PID applied small corrections against motion.
+                if (tgt > 0.0f && duty > 0.0f && duty < MOTOR_MIN_DUTY)  return MOTOR_MIN_DUTY;
+                if (tgt < 0.0f && duty < 0.0f && duty > -MOTOR_MIN_DUTY) return -MOTOR_MIN_DUTY;
+                return duty;
+            };
+            motors_set_duty(apply_floor(out_r, tgt_r), apply_floor(out_l, tgt_l));
 
             // Odometry integration (mid-point rule)
             float d_r  = (float)delta_r / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;

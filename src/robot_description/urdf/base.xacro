@@ -59,6 +59,15 @@
     </joint>
   </xacro:macro>
 
+  <!-- base_footprint: ground-plane projection of base_link — required by Nav2 and robot_localization.
+       No geometry; KDL complains if the root link has inertia, so this link carries none. -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
   <!-- Base chassis — origin at wheel axle height, centered between all four wheels.
        Chassis bottom face is bracket_offset above the axle, so box center is offset in z. -->
   <link name="base_link">

@@ -31,6 +31,7 @@ def generate_launch_description():
         executable='joint_state_publisher',
         output='screen',
         parameters=[joint_state_cfg],
+        arguments=[xacro_file],
     )
 
     return LaunchDescription([
