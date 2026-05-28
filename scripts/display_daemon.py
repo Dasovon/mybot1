@@ -75,7 +75,7 @@ class BatteryReader:
 
     def _run(self):
         cmd = (
-            f'{_ROS_SOURCE} && exec ros2 topic echo '
+            f'{_ROS_SOURCE} && export PYTHONUNBUFFERED=1 && exec ros2 topic echo '
             '/battery_state sensor_msgs/msg/BatteryState --no-arr'
         )
         while True:
