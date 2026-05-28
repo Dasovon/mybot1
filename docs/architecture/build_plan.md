@@ -18,7 +18,7 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 |---|---|
 | 0 — Hardware & Environment | Complete |
 | 1 — ESP32 Firmware | **Complete** — all gate checks pass. IMU 30 Hz, encoders correct direction, motors forward, watchdog fires. PID gains need tuning before Phase 2 odom accuracy matters. See [`docs/testing/phase1_motor_validation_2026-05-25.md`](../testing/phase1_motor_validation_2026-05-25.md) |
-| 2 — ROS 2 Foundation (URDF + TF) | Not started |
+| 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, no disconnected frames. base_footprint root added. JSP Jazzy 2.4.1 invocation fixed. Sensor offsets are placeholders — measure before Phase 3 EKF. See [`docs/testing/phase2_urdf_tf_validation_2026-05-27.md`](../testing/phase2_urdf_tf_validation_2026-05-27.md) |
 | 3 — Sensor Bridge & EKF | Not started |
 | 4 — SLAM | Not started |
 | 5 — Nav2 Autonomous Navigation | Not started |
