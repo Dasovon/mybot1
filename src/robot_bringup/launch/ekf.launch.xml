@@ -1,0 +1,10 @@
+<launch>
+  <!-- robot_localization EKF: fuses /diff_cont/odom + /imu/imu → /odom at 20 Hz
+       Publishes: odom → base_footprint TF
+       Requires: microros-agent.service running on Pi (ESP32 must be publishing) -->
+
+  <node pkg="robot_localization" exec="ekf_node" name="ekf_filter_node" output="screen">
+    <param from="$(find-pkg-share robot_bringup)/config/ekf.yaml"/>
+    <remap from="odometry/filtered" to="odom"/>
+  </node>
+</launch>
