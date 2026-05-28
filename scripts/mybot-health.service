@@ -1,0 +1,20 @@
+[Unit]
+Description=mybot1 boot health check
+Documentation=file:///home/ubuntu/bot_ws/scripts/health_check.sh
+# Run after both hardware services have had a chance to start
+After=microros-agent.service mybot-display.service network-online.target
+Wants=microros-agent.service mybot-display.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+# oneshot + RemainAfterExit so systemctl status shows pass/fail after completion
+RemainAfterExit=yes
+ExecStart=/home/ubuntu/bot_ws/scripts/health_check.sh
+# Allow enough time for ESP32 micro-ROS session to establish (~10 s) plus topic checks
+TimeoutStartSec=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
