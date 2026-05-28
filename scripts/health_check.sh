@@ -20,10 +20,11 @@ if touch /tmp/.mybot_rw_check 2>/dev/null; then
     log_pass "Root filesystem is read-write"
 else
     log_fix "Root filesystem is read-only — remounting rw"
-    if sudo mount -o remount,rw / 2>/dev/null; then
+    ROOT_DEV=$(findmnt -n -o SOURCE /)
+    if sudo mount -o remount,rw "$ROOT_DEV" / 2>/dev/null; then
         log_pass "Root filesystem remounted read-write"
     else
-        log_fail "Could not remount root read-write"
+        log_fail "Could not remount root read-write ($ROOT_DEV)"
     fi
 fi
 

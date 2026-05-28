@@ -1,6 +1,6 @@
 [Unit]
 Description=mybot1 OLED Display Daemon
-After=multi-user.target
+After=local-fs.target
 
 [Service]
 Type=simple
@@ -9,6 +9,7 @@ WorkingDirectory=/tmp
 ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && exec python3 /home/ubuntu/bot_ws/scripts/display_daemon.py"
 Restart=always
 RestartSec=5
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

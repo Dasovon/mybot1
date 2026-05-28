@@ -1,6 +1,6 @@
 [Unit]
 Description=micro-ROS agent — ESP32 USB CDC serial bridge
-After=multi-user.target
+After=local-fs.target network.target
 StartLimitIntervalSec=0
 
 [Service]

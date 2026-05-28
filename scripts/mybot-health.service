@@ -2,7 +2,7 @@
 Description=mybot1 boot health check
 Documentation=file:///home/ubuntu/bot_ws/scripts/health_check.sh
 # Run after both hardware services have had a chance to start
-After=microros-agent.service mybot-display.service network-online.target
+After=microros-agent.service mybot-display.service
 Wants=microros-agent.service mybot-display.service
 
 [Service]

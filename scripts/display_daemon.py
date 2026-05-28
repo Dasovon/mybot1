@@ -9,9 +9,13 @@ GPIO: DC=GPIO25, RST=GPIO27 (BCM, gpiochip4 on Pi 5)
 Battery: /battery_state at 1 Hz from ESP32 micro-ROS
 """
 
+import signal
 import socket
+import sys
 import threading
 import time
+
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 import lgpio
 import psutil
@@ -66,16 +70,22 @@ class BatteryReader:
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
-        try:
-            import rclpy
-            from sensor_msgs.msg import BatteryState
-            rclpy.init()
-            node = rclpy.create_node('display_battery_reader')
-            node.create_subscription(
-                BatteryState, '/battery_state', self._callback, 10)
-            rclpy.spin(node)
-        except Exception:
-            pass
+        import traceback
+        while True:
+            try:
+                import rclpy
+                from sensor_msgs.msg import BatteryState
+                if not rclpy.ok():
+                    rclpy.init()
+                node = rclpy.create_node('display_battery_reader')
+                node.create_subscription(
+                    BatteryState, '/battery_state', self._callback, 10)
+                rclpy.spin(node)
+                node.destroy_node()
+            except Exception:
+                traceback.print_exc()
+            self.connected = False
+            time.sleep(5)
 
     def _callback(self, msg):
         self.voltage = msg.voltage
