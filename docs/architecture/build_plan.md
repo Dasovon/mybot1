@@ -1373,7 +1373,7 @@ In `nav2_params.yaml`, enable `voxel_layer` in both global and local costmaps. S
 **Step 3 — OLED display daemon**
 Wire OLED to Pi SPI0 per wiring table in `docs/hardware/oled_display.md`. Enable SPI via `raspi-config`.
 
-The display is driven by a systemd daemon (`scripts/display_daemon.py`), not a ROS node. It subscribes to `/battery_state` via rclpy in a background thread and reads system stats via `psutil`. If ROS2 or the micro-ROS agent is down, it falls back gracefully and continues showing system stats with `ROS:--` in the status row.
+The display is driven by a systemd daemon (`scripts/display_daemon.py`), not a ROS node. It reads battery data by spawning a `ros2 topic echo /battery_state` subprocess and parsing its output — this avoids rclpy threading / DDS initialization issues in a long-running service. It reads system stats via `psutil`. If ROS2 is down it falls back gracefully with `ROS:--`.
 
 **Dependency:** `microros-agent.service` must also be deployed so the agent auto-restarts and provides the `/battery_state` feed on boot.
 
@@ -1381,15 +1381,22 @@ Display layout (128×64, 5 rows at 9pt monospace):
 | Row | Content | Source |
 |---|---|---|
 | 1 | Hostname + IP address | socket / psutil |
-| 2 | Battery bar (visual fill) + % | `/battery_state` |
+| 2 | Battery bar (visual fill) + % | `/battery_state` subprocess |
 | 3 | Voltage + current + Pi CPU temperature | `/battery_state` + psutil |
 | 4 | CPU % + RAM % | psutil |
-| 5 | `ROS:OK`/`ROS:--` + uptime | rclpy freshness |
+| 5 | `ROS:OK`/`ROS:--` + uptime | subprocess freshness |
 
 Files to deploy:
-- `scripts/display_daemon.py` — rclpy subscriber + psutil, renders via luma.oled over SPI at 2 Hz
+- `scripts/display_daemon.py` — subprocess battery reader + psutil, renders via luma.oled over SPI at 2 Hz
 - `scripts/mybot-display.service` — `User=ubuntu`, `WorkingDirectory=/tmp`, sources ROS2 setup
 - `scripts/microros-agent.service` — `Restart=always`, `StartLimitIntervalSec=0`, `RestartSec=1`
+
+**Step 3a — Pi INA219 (battery monitor independent of ESP32)**
+Wire a second INA219 directly to the Pi's I2C-1 bus (GPIO 2/3) so battery voltage is always available, even before micro-ROS establishes its session (which can take 1–6 minutes after boot). See [`docs/hardware/ina219_pi_battery_monitor.md`](../hardware/ina219_pi_battery_monitor.md) for full wiring and software integration.
+
+When wired: update `display_daemon.py` `BatteryReader` to use `smbus2`/`pi-ina219` directly instead of the subprocess. Battery will appear on the OLED from the first second of boot.
+
+Required hardware: 1× Adafruit INA219 breakout, tap from battery+ rail (after 3A fuse), Pi header pins 1/3/5/6.
 
 Install and enable:
 ```bash
