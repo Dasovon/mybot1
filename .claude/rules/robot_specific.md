@@ -102,14 +102,15 @@ platform = espressif32@^6.8.0
 
 ## Display daemon
 
-The OLED display daemon is a **ROS2-independent systemd service** on the Pi, not a ROS node. This is intentional: the display works at boot before ROS2 starts, during ROS2 crashes, and during ESP32 reflashing.
+The OLED display daemon is a **systemd service** on the Pi (`mybot-display.service`). It subscribes to `/battery_state` via rclpy and renders voltage + current to the Waveshare 2.42" OLED (SSD1309).
 
 - Source: `scripts/display_daemon.py`
 - Service: `scripts/mybot-display.service`
-- Reads battery JSON from `/dev/ttyUSB0` at 115200 baud — ESP32 UART0 (GPIO43/44) via Lonely Binary onboard CH340, UART USB-C port
+- Reads battery data from ROS2 `/battery_state` topic (published by ESP32 micro-ROS at 1 Hz)
 - Renders via luma.oled over SPI0 to Waveshare 2.42" OLED (SSD1309)
 - Pi 5 requires `LGPIOAdapter` (lgpio, gpiochip4) instead of RPi.GPIO — already implemented
 - Service `WorkingDirectory=/tmp` required (lgpio creates notification pipes in CWD)
+- **Note:** Display requires microros-agent.service to be running (source of `/battery_state`)
 
 ## Common debugging commands
 

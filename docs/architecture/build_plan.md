@@ -1177,26 +1177,25 @@ All three sensor streams (LiDAR, RealSense, IMU/odom from ESP32) active and fuse
 
 | File | Purpose |
 |---|---|
-| `src/esp32_serial_bridge/esp32_serial_bridge/serial_bridge_node.py` | micro-ROS agent wrapper node |
-| `src/esp32_serial_bridge/launch/bridge.launch.py` | Launches micro-ROS agent + bridge node |
-| `src/robot_bringup/launch/sensors.launch.py` | Launches LiDAR + RealSense nodes |
-| `src/robot_bringup/config/ekf.yaml` | robot_localization EKF config |
-| `src/robot_bringup/launch/ekf.launch.py` | Launches robot_localization node |
+| `src/robot_bringup/config/ekf.yaml` | robot_localization EKF config ✅ created |
+| `src/robot_bringup/launch/ekf.launch.xml` | Launches robot_localization node ✅ created |
+| `src/robot_bringup/launch/lidar.launch.xml` | Launches RPLidar A1 node ✅ created |
+| `src/robot_bringup/launch/realsense.launch.xml` | Launches RealSense driver ✅ already existed |
 
 ### Step-by-step
 
-**Step 1 — micro-ROS agent bridge**
-`bridge.launch.py` must start `micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200`. Use the stable by-id path from CLAUDE.md as a fallback. The node should wait for the device to appear before launching.
+**Step 1 — micro-ROS agent**
+The micro-ROS agent runs as `microros-agent.service` on the Pi — no separate launch needed. It uses native USB CDC (`/dev/ttyACM0`) at 921600 baud. Confirm it is active:
+```bash
+systemctl is-active microros-agent.service
+ros2 topic hz /diff_cont/odom   # must show ~30 Hz
+```
 
 **Step 2 — LiDAR driver**
-Launch `rplidar_ros` with device `/dev/rplidar`. Frame ID must be `laser`. Expected rate: ~5.5 Hz on `/scan`.
+Launch via `lidar.launch.xml`. Frame ID must be `laser`. Expected rate: ~5.5 Hz on `/scan`.
 
 ```bash
-ros2 run rplidar_ros rplidar_composition --ros-args \
-    -p serial_port:=/dev/rplidar \
-    -p serial_baudrate:=115200 \
-    -p frame_id:=laser \
-    -p angle_compensate:=true
+ros2 launch robot_bringup lidar.launch.xml
 ```
 
 **LiDAR must pass independently before continuing:**
@@ -1207,33 +1206,39 @@ ros2 topic echo /scan --once | head -10   # ranges must not be all-zero or all-i
 Do not proceed to Step 3 until these pass.
 
 **Step 3 — RealSense driver**
-Launch `realsense2_camera` with:
-- Resolution: 640×480
-- Depth FPS: 15
-- Color FPS: 15
-- Backend: RSUSB
-- Frame prefix: `camera`
+Launch via `realsense.launch.xml` (config: 424×240 depth @ 6 Hz, color @ 15 Hz, RGB8 point cloud):
+```bash
+ros2 launch robot_bringup realsense.launch.xml
+```
+See [`docs/testing/phase3_realsense_validation_2026-05-24.md`](../testing/phase3_realsense_validation_2026-05-24.md) for validated config and known v4.x issues.
 
-**Step 4 — EKF configuration**
+**Step 4 — EKF**
 `ekf.yaml` fuses:
-- `/diff_cont/odom` — x, y, yaw, vx, vyaw
-- `/imu/imu` — angular velocity z, linear acceleration x/y
+- `/diff_cont/odom` — x, y, yaw position + vx, vyaw velocity
+- `/imu/imu` — angular velocity z + linear acceleration x/y
 
-IMU orientation **disabled** (unreliable magnetometer). Set `two_d_mode: true`. Output frame: `odom`. Base frame: `base_link`.
+IMU orientation **disabled** (BNO055 magnetometer unreliable on metal chassis). `two_d_mode: true`. Base frame: `base_footprint`. Output: `/odom` at 20 Hz, `odom → base_footprint` TF.
+
+```bash
+ros2 launch robot_bringup ekf.launch.xml
+```
+
+**Step 5 — PID floor tuning**
+Before declaring Phase 3 complete, validate that wheel velocity tracks commands within ±10% at steady state on the floor. Use `ros2 bag record` to capture odom + IMU during a straight-line drive. Adjust `PID_KI` in `firmware/esp32/include/pid.h` if tracking is slow.
 
 ### Validation gate — Phase 3
 
 ```bash
-ros2 topic hz /scan              # ~5.5 Hz
-ros2 topic hz /camera/depth/points   # ~15 Hz
-ros2 topic hz /diff_cont/odom    # ~30 Hz
-ros2 topic hz /odom              # ~20 Hz — EKF output
-ros2 run tf2_ros tf2_echo odom base_link   # must update smoothly while robot moves
+ros2 topic hz /scan                              # ~5.5 Hz
+ros2 topic hz /camera/camera/depth/color/points  # ~6 Hz
+ros2 topic hz /diff_cont/odom                    # ~30 Hz
+ros2 topic hz /odom                              # ~20 Hz — EKF output
+ros2 run tf2_ros tf2_echo odom base_footprint    # must update smoothly while robot moves
 ```
 
 Drive the robot slowly in a straight line. `/odom` pose should track accurately with no jumps.
 
-Phase 3 is complete when all topic rates are met and `/odom` tracks motion smoothly.
+Phase 3 is complete when all topic rates are met, `/odom` tracks motion smoothly, and PID velocity error is ≤ ±10% at steady state.
 
 ---
 

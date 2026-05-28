@@ -8,10 +8,10 @@
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWMA — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → TB6612FNG PWMA |
+| 10 | PWMA — Right side speed (LEDC ch 0, 1 kHz, 8-bit) → TB6612FNG PWMA |
 | 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
 | 12 | AIN2 — Right side direction 2 → TB6612FNG AIN2 |
-| 13 | PWMB — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → TB6612FNG PWMB |
+| 13 | PWMB — Left side speed (LEDC ch 1, 1 kHz, 8-bit) → TB6612FNG PWMB |
 | 14 | BIN1 — Left side direction 1 → TB6612FNG BIN1 |
 | 15 | BIN2 — Left side direction 2 → TB6612FNG BIN2 |
 | 17 | (free) |
@@ -65,7 +65,8 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | PID / encoder loop | 100 Hz |
 | IMU + odom publish (micro-ROS) | 30 Hz |
 | LiDAR scan (RPLidar A1) | ~5.5 Hz |
-| RealSense depth + color | 15 Hz |
+| RealSense depth | 6 Hz (424×240) |
+| RealSense color | 15 Hz (424×240) |
 | EKF output (`/odom`) | 20 Hz |
 | Nav2 controller | 20 Hz |
 | Battery publish | 1 Hz |
@@ -77,7 +78,8 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 |---|---|
 | `map` | SLAM output |
 | `odom` | EKF output |
-| `base_link` | Robot body origin |
+| `base_footprint` | Robot base — EKF publishes `odom → base_footprint` |
+| `base_link` | Robot body origin (fixed joint child of `base_footprint`) |
 | `laser` | RPLidar A1 |
 | `imu_link` | BNO055 |
 | `camera_link` | RealSense D435 |

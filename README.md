@@ -88,7 +88,7 @@ bot_ws/
 | `/battery_state` | ESP32 → Pi | 1 Hz |
 | `/odom` | EKF fused output | 20 Hz |
 | `/scan` | RPLidar → SLAM | ~5.5 Hz |
-| `/camera/depth/points` | RealSense → Nav2 | 15 Hz |
+| `/camera/camera/depth/color/points` | RealSense → Nav2 | ~6 Hz |
 
 ---
 
@@ -108,17 +108,17 @@ Files follow the naming convention `<type>_<YYYY-MM-DD>.md`. Protocols describe 
 
 ---
 
-## Development Order
+## Build Progress
 
-1. Reliable motor control (PID + encoders via micro-ROS)
-2. Stable odometry (EKF tuned)
-3. LiDAR driver + clean /scan data (RPLidar A1)
-4. Reliable SLAM (clean map)
-5. Correct TF tree (validated in RViz2)
-6. Nav2 autonomous navigation
-7. RealSense voxel costmap fusion
-8. BME680 environmental sensing
-9. Semantic perception (YOLO)
+| Phase | Goal | Status |
+|---|---|---|
+| 1 | ESP32 firmware — PID, encoders, IMU, battery, micro-ROS | **Complete** |
+| 2 | URDF + TF tree | **Complete** — 9 frames validated in RViz2 |
+| 3 | Sensor bridge + LiDAR + RealSense + EKF → `/odom` | **In progress** — EKF live; LiDAR pending |
+| 4 | SLAM: consistent 2D map | Not started |
+| 5 | Nav2: autonomous navigation | Not started |
+| 6 | BME680 + RealSense voxel costmap | Not started |
+| 7 | Semantic perception (YOLO) | Not started |
 
 ---
 
