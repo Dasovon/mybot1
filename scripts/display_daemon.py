@@ -2,7 +2,8 @@
 """
 OLED display daemon for mybot1 — systemd service on Pi.
 Reads Pi system stats via psutil and battery data from the ROS2
-/battery_state topic (sensor_msgs/BatteryState) via rclpy.
+/battery_state topic via a ros2 topic echo subprocess (avoids rclpy
+threading / DDS initialization issues in a long-running service).
 
 Display: Waveshare 2.42" SSD1309, 128x64, SPI0
 GPIO: DC=GPIO25, RST=GPIO27 (BCM, gpiochip4 on Pi 5)
@@ -11,11 +12,10 @@ Battery: /battery_state at 1 Hz from ESP32 micro-ROS
 
 import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
-
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 import lgpio
 import psutil
@@ -32,6 +32,11 @@ UPDATE_HZ = 2
 
 BAT_FULL_V   = 12.6
 BAT_CUTOFF_V = 9.9
+
+_ROS_SOURCE = (
+    'source /opt/ros/jazzy/setup.bash && '
+    'source /home/ubuntu/microros_ws/install/setup.bash'
+)
 
 
 class LGPIOAdapter:
@@ -58,44 +63,49 @@ class LGPIOAdapter:
 
 
 class BatteryReader:
-    """Subscribes to /battery_state via rclpy in a background thread.
-    Falls back to disconnected state if ROS2 is not running.
+    """Reads /battery_state by spawning a ros2 topic echo subprocess.
+    Retries automatically when the topic disappears or the agent restarts.
     """
 
     def __init__(self):
         self.voltage = 0.0
         self.current = 0.0
-        self.connected = False
         self._last_msg_time = 0.0
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
-        import traceback
+        cmd = (
+            f'{_ROS_SOURCE} && exec ros2 topic echo '
+            '/battery_state sensor_msgs/msg/BatteryState --no-arr'
+        )
         while True:
             try:
-                import rclpy
-                from sensor_msgs.msg import BatteryState
-                if not rclpy.ok():
-                    rclpy.init()
-                node = rclpy.create_node('display_battery_reader')
-                node.create_subscription(
-                    BatteryState, '/battery_state', self._callback, 10)
-                rclpy.spin(node)
-                node.destroy_node()
+                proc = subprocess.Popen(
+                    ['bash', '-c', cmd],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    text=True, bufsize=1,
+                )
+                for line in proc.stdout:
+                    line = line.strip()
+                    if line.startswith('voltage:'):
+                        try:
+                            self.voltage = float(line.split()[1])
+                            self._last_msg_time = time.monotonic()
+                        except (IndexError, ValueError):
+                            pass
+                    elif line.startswith('current:'):
+                        try:
+                            self.current = float(line.split()[1])
+                        except (IndexError, ValueError):
+                            pass
+                proc.wait()
             except Exception:
-                traceback.print_exc()
-            self.connected = False
+                pass
             time.sleep(5)
-
-    def _callback(self, msg):
-        self.voltage = msg.voltage
-        self.current = msg.current
-        self._last_msg_time = time.monotonic()
-        self.connected = True
 
     @property
     def fresh(self):
-        return self.connected and (time.monotonic() - self._last_msg_time < 3.0)
+        return self._last_msg_time > 0 and (time.monotonic() - self._last_msg_time < 3.0)
 
     @property
     def pct(self):
@@ -115,7 +125,6 @@ def get_ip() -> str:
 
 
 def _draw_battery_bar(draw, x, y, w, h, pct):
-    """Draw a battery icon: outer border, filled level, end-cap."""
     cap_w, cap_h = 3, h // 2
     cap_x = x + w
     cap_y = y + (h - cap_h) // 2
@@ -128,7 +137,8 @@ def _draw_battery_bar(draw, x, y, w, h, pct):
 
 def render(device, bat: BatteryReader):
     try:
-        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 9)
+        font = ImageFont.truetype(
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 9)
     except IOError:
         font = ImageFont.load_default()
 
@@ -144,27 +154,22 @@ def render(device, bat: BatteryReader):
         temp_c = temps[0].current if temps else 0.0
         ip     = get_ip()
 
-        # Row 1 (y=0): hostname + IP
         draw.text((0, 0), f'{hostname}  {ip}', font=font, fill=1)
 
-        # Row 2 (y=12): battery bar + percentage
         bar_w, bar_h = 96, 10
         pct = bat.pct if bat.fresh else 0
         _draw_battery_bar(draw, 0, 12, bar_w, bar_h, pct)
         pct_str = f'{pct:3d}%' if bat.fresh else ' -- '
         draw.text((bar_w + 5, 13), pct_str, font=font, fill=1)
 
-        # Row 3 (y=24): voltage + current + Pi temperature
         if bat.fresh:
             row3 = f'{bat.voltage:.1f}V {bat.current:.2f}A T:{temp_c:.0f}C'
         else:
             row3 = f'no ROS2     T:{temp_c:.0f}C'
         draw.text((0, 24), row3, font=font, fill=1)
 
-        # Row 4 (y=36): CPU + RAM
         draw.text((0, 36), f'CPU:{cpu:3.0f}%   RAM:{ram:3.0f}%', font=font, fill=1)
 
-        # Row 5 (y=50): ROS status + uptime
         uptime_s = int(time.monotonic())
         h, rem = divmod(uptime_s, 3600)
         m = rem // 60
@@ -176,6 +181,8 @@ def render(device, bat: BatteryReader):
 
 
 def main():
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
     serial_obj = spi(device=SPI_DEV, port=SPI_PORT,
                      gpio_DC=GPIO_DC, gpio_RST=GPIO_RST,
                      gpio=LGPIOAdapter())
