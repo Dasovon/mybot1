@@ -77,8 +77,10 @@ static char frame_imu_link[]  = "imu_link";
 // ---------------------------------------------------------------------------
 enum State { WAITING_AGENT, AGENT_CONNECTED, AGENT_DISCONNECTED };
 static State state = WAITING_AGENT;
-static uint32_t last_ping_ms = 0;
-static const uint32_t PING_INTERVAL_MS = 2000;
+static uint32_t last_ping_ms      = 0;
+static uint32_t last_pub_ok_ms    = 0;  // last time odom published successfully
+static const uint32_t PING_INTERVAL_MS   = 10000;  // WAITING_AGENT only
+static const uint32_t PUB_TIMEOUT_MS     = 30000;  // 30 s with no successful publish → session dead
 
 static bool create_entities() {
     allocator = rcl_get_default_allocator();
@@ -158,6 +160,10 @@ static void destroy_entities() {
 // ---------------------------------------------------------------------------
 void microros_init() {
     // Serial (USB CDC, GPIO 19/20) opened in arduino_transport_open on first agent ping
+    // Serial0 (UART0 via CH340, GPIO 43/44) used for debug output → Pi /dev/ttyUSB0
+    Serial0.begin(115200);
+    Serial0.printf("[uROS] init: PING_INTERVAL=%lums PUB_TIMEOUT=%lums\n",
+                   (unsigned long)PING_INTERVAL_MS, (unsigned long)PUB_TIMEOUT_MS);
     set_microros_transports();
     state        = WAITING_AGENT;
     last_ping_ms = millis();
@@ -170,28 +176,35 @@ void microros_spin() {
         case WAITING_AGENT:
             if (now - last_ping_ms >= PING_INTERVAL_MS) {
                 last_ping_ms = now;
-                if (rmw_uros_ping_agent(100, 1) == RMW_RET_OK) {
+                if (rmw_uros_ping_agent(500, 3) == RMW_RET_OK) {
+                    Serial0.printf("[uROS] agent found, creating entities t=%lums\n", (unsigned long)now);
                     if (create_entities()) {
+                        last_pub_ok_ms = now;  // grace period before publish watchdog starts
                         state = AGENT_CONNECTED;
+                        Serial0.printf("[uROS] CONNECTED t=%lums\n", (unsigned long)now);
+                    } else {
+                        Serial0.printf("[uROS] create_entities FAILED t=%lums\n", (unsigned long)now);
                     }
                 }
             }
             break;
 
         case AGENT_CONNECTED:
-            // Spin executor to handle incoming cmd_vel
+            // Spin executor to handle incoming cmd_vel — no ping here; pinging when
+            // connected corrupts the XRCE session state on the first failure, causing
+            // an immediate DELETE_CLIENT that bypasses our fail-count threshold.
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
-            // Periodic connectivity check
-            if (now - last_ping_ms >= PING_INTERVAL_MS) {
-                last_ping_ms = now;
-                if (rmw_uros_ping_agent(100, 1) != RMW_RET_OK) {
-                    destroy_entities();
-                    state = AGENT_DISCONNECTED;
-                }
+            // Publish watchdog: if no odom has been published successfully in
+            // PUB_TIMEOUT_MS, the session is dead (agent gone or transport broken).
+            if (now - last_pub_ok_ms > PUB_TIMEOUT_MS) {
+                Serial0.printf("[uROS] publish watchdog fired, destroying t=%lums\n", (unsigned long)now);
+                destroy_entities();
+                state = AGENT_DISCONNECTED;
             }
             break;
 
         case AGENT_DISCONNECTED:
+            Serial0.printf("[uROS] DISCONNECTED → WAITING t=%lums\n", (unsigned long)now);
             state        = WAITING_AGENT;
             last_ping_ms = now;
             break;
@@ -217,7 +230,9 @@ void microros_publish_odom(float x, float y, float theta,
     odom_msg.twist.twist.linear.x  = vel_linear;
     odom_msg.twist.twist.angular.z = vel_angular;
 
-    rcl_publish(&pub_odom, &odom_msg, nullptr);
+    if (rcl_publish(&pub_odom, &odom_msg, nullptr) == RCL_RET_OK) {
+        last_pub_ok_ms = millis();
+    }
 }
 
 void microros_publish_imu(float ax, float ay, float az,

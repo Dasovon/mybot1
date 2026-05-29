@@ -64,27 +64,34 @@ class LGPIOAdapter:
 
 class BatteryReader:
     """Reads /battery_state by spawning a ros2 topic echo subprocess.
-    Retries automatically when the topic disappears or the agent restarts.
+    Self-heals: kills and restarts the subprocess if no message is received
+    for STALE_RESTART_S seconds, so DDS re-discovery after session cycling
+    is forced rather than waited on.
     """
+    STALE_RESTART_S = 15.0
 
     def __init__(self):
         self.voltage = 0.0
         self.current = 0.0
         self._last_msg_time = 0.0
+        self._proc = None
         threading.Thread(target=self._run, daemon=True).start()
+        threading.Thread(target=self._watchdog, daemon=True).start()
+
+    def _spawn(self):
+        cmd = (f'{_ROS_SOURCE} && export PYTHONUNBUFFERED=1 && '
+               f'exec ros2 topic echo --qos-reliability reliable /battery_state')
+        self._proc = subprocess.Popen(
+            ['bash', '-c', cmd],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, bufsize=1,
+        )
+        return self._proc
 
     def _run(self):
-        cmd = (
-            f'{_ROS_SOURCE} && export PYTHONUNBUFFERED=1 && exec ros2 topic echo '
-            '/battery_state sensor_msgs/msg/BatteryState --no-arr'
-        )
         while True:
             try:
-                proc = subprocess.Popen(
-                    ['bash', '-c', cmd],
-                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                    text=True, bufsize=1,
-                )
+                proc = self._spawn()
                 for line in proc.stdout:
                     line = line.strip()
                     if line.startswith('voltage:'):
@@ -101,11 +108,26 @@ class BatteryReader:
                 proc.wait()
             except Exception:
                 pass
+            self._proc = None
             time.sleep(5)
+
+    def _watchdog(self):
+        """Kills the subprocess if no message arrives within STALE_RESTART_S,
+        forcing _run() to spawn a fresh one and re-do DDS discovery."""
+        while True:
+            time.sleep(self.STALE_RESTART_S)
+            if self._proc is not None:
+                stale = (self._last_msg_time == 0.0 or
+                         time.monotonic() - self._last_msg_time > self.STALE_RESTART_S)
+                if stale:
+                    try:
+                        self._proc.kill()
+                    except Exception:
+                        pass
 
     @property
     def fresh(self):
-        return self._last_msg_time > 0 and (time.monotonic() - self._last_msg_time < 3.0)
+        return self._last_msg_time > 0 and (time.monotonic() - self._last_msg_time < 10.0)
 
     @property
     def pct(self):
