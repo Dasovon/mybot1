@@ -19,16 +19,22 @@ extern "C" bool arduino_transport_close(struct uxrCustomTransport * transport) {
 extern "C" size_t arduino_transport_write(struct uxrCustomTransport* transport,
                                            const uint8_t* buf, size_t len, uint8_t* err) {
     (void)transport; (void)err;
-    size_t sent = Serial.write(buf, len);
-    Serial.flush();
-    return sent;
+    // No flush — TX hardware drains at 921600 baud in background (~2ms per fragment).
+    // Serial.flush() blocked for up to 100ms per fragment (×3 odom fragments), stalling
+    // the 100Hz PID loop and preventing integrator accumulation.
+    return Serial.write(buf, len);
 }
 
 extern "C" size_t arduino_transport_read(struct uxrCustomTransport* transport,
                                           uint8_t* buf, size_t len, int timeout_ms,
                                           uint8_t* err) {
     (void)transport; (void)err;
-    Serial.setTimeout(timeout_ms < 0 ? 0 : timeout_ms);
+    // Non-blocking read (0 ms): XRCE calls transport_read in a tight loop during
+    // RELIABLE ACK waits; any non-zero cap × many calls = multi-second stalls that
+    // halt PID and trigger the cmd_vel watchdog. Data arriving in the USB CDC buffer
+    // is still read immediately — setTimeout(0) only changes the wait-for-first-byte
+    // behavior when the buffer is empty.
+    Serial.setTimeout(0);
     return Serial.readBytes((char*)buf, len);
 }
 
