@@ -554,6 +554,8 @@ After every test that involves the robot moving, a sensor reading, or a subsyste
 
 Format as a table or clearly labeled sections. Include specific numbers — not just "pass" or "looks good". Always compare measured to expected explicitly.
 
+**HARD RULE — stop after reporting.** After presenting results, end the response there. Do not propose next steps, make edits, commit changes, or take any action in the same turn. The user reads the results first and directs what happens next. This applies even if something else obviously needs fixing.
+
 ### Before Changing Things
 
 When about to make a non-trivial firmware or config change, or when hitting an error with multiple possible causes:
