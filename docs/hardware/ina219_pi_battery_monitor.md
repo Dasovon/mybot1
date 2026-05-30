@@ -4,7 +4,7 @@ Second INA219 wired directly to the Pi for battery monitoring independent of ESP
 
 **Why:** Display and health check need battery voltage at boot, before micro-ROS establishes its session (which can take 1–6 minutes). Reading from the Pi directly via smbus2 eliminates the ROS2 dependency for battery display.
 
-**Note:** The existing INA219 on the ESP32 I2C bus (0x28/0x40) remains unchanged — the ESP32 uses it for battery cutoff (safety watchdog). This is a second, independent chip for monitoring only.
+**Note:** The existing INA219 on the ESP32 I2C bus (GPIO 8/9, 0x40) remains unchanged — the ESP32 uses it for battery cutoff (safety watchdog). This is a second, independent chip for monitoring only.
 
 ---
 
@@ -12,65 +12,92 @@ Second INA219 wired directly to the Pi for battery monitoring independent of ESP
 
 | Item | Value |
 |---|---|
-| Chip | Adafruit INA219 breakout (same as ESP32 unit) |
-| I2C address | 0x40 (A0=GND, A1=GND — same default address, different bus) |
+| Chip | Generic INA219 DC current sensor module (6-pin header + screw terminals) |
+| I2C address | 0x40 (A0=GND, A1=GND — default, address pads unsoldered) |
 | Pi I2C bus | I2C-1 (GPIO 2 SDA, GPIO 3 SCL — 40-pin header) |
-| Shunt | On-board 0.1 Ω (100 mA rated — sufficient for monitoring; ESP32 INA219 handles cutoff) |
+| Shunt | On-board 0.1 Ω (R100) |
 | Max bus voltage | 26V (INA219 spec — safe for 3S LiPo ~12.6V) |
-| Logic voltage | 3.3V from Pi 3V3 pin |
+| Logic voltage | 3.3V from Pi Pin 17 |
 
 ---
 
-## Wiring Diagram
+## Board Pinout
+
+This module has two connectors:
+
+**Left side — screw terminals (power measurement, in-series with load):**
+```
+1  Vin+   Battery positive input (before shunt)
+2  Vin−   Load output (after shunt)
+```
+
+**Right side — 6-pin header (I2C + power):**
+```
+1  Vin+   (same node as left screw terminal Vin+)
+2  Vin−   (same node as left screw terminal Vin−)
+3  SDA    I2C data
+4  SCL    I2C clock
+5  GND    Ground
+6  VCC    Logic supply (3.3V from Pi)
+```
+
+---
+
+## Wiring
+
+### Power path — INA219 in series on the logic rail
+
+The INA219 shunt is inserted between the 3A fuse and the EP-0225 barrel jack input.
+This measures all current drawn by the Pi + ESP32 logic rail.
 
 ```
-Battery positive rail (after main 3A fuse, before EP-0225 barrel jack)
-        │
-        ├──────────────────────────────── INA219 VIN+
-        │                                      │
-        │                               [0.1Ω shunt]
-        │                                      │
-        │                                 INA219 VIN−  ──── (load not needed for voltage-only monitoring)
-        │
-        │   INA219 breakout
-        │   ┌────────────┐
-        └───┤ VIN+       │
-            │ VIN−       │  (shunt in series; leave VIN− open for voltage-only read)
-            │            │
-            │ VCC ───────┼──── Pi 3V3  (header pin 1 or 17)
-            │ GND ───────┼──── Pi GND  (header pin 6, 9, 14, 20, 25, 30, 34, or 39)
-            │ SDA ───────┼──── Pi GPIO 2  (header pin 3)  ← I2C-1 SDA
-            │ SCL ───────┼──── Pi GPIO 3  (header pin 5)  ← I2C-1 SCL
-            │ A0  ───────┼──── GND  (address bit 0 = 0)
-            │ A1  ───────┼──── GND  (address bit 1 = 0) → I2C address 0x40
-            └────────────┘
+Battery+  →  [3A fuse]  →  INA219 Vin+  →  [0.1Ω shunt]  →  INA219 Vin−  →  EP-0225 barrel jack IN
+```
+
+Use the **screw terminals** on the left side of the board for Vin+ and Vin−.
+
+### Pi header connections — 6-pin header on right side
+
+```
+Board pin 3 (SDA)  →  Pi Pin 3   (GPIO 2, I2C-1 SDA)
+Board pin 4 (SCL)  →  Pi Pin 5   (GPIO 3, I2C-1 SCL)
+Board pin 5 (GND)  →  Pi Pin 6   (GND)
+Board pin 6 (VCC)  →  Pi Pin 17  (3.3V)  ← use Pin 17; Pin 1 is used by display
 ```
 
 ### Pi 40-pin header reference (relevant pins)
 
 ```
- 3V3  [1] [2]  5V
- SDA  [3] [4]  5V
- SCL  [5] [6]  GND
+ 3V3  [1]  [2]  5V
+ SDA  [3]  [4]  5V
+ SCL  [5]  [6]  GND
+      ...
+ 3V3 [17] [18]
 ```
 
-Connect INA219 to pins 1 (3V3), 3 (SDA), 5 (SCL), 6 (GND).
+### Common ground
 
-### Battery tap point
+Battery −, Pi GND, and INA219 GND share the same rail through the EP-0225 barrel jack.
+No extra ground wire needed.
 
-Tap VIN+ from the **battery positive rail after the 3A fuse** — the same rail that feeds EP-0225. Do NOT tap from the 5V USB output of EP-0225 (that's regulated, not battery voltage).
+---
 
-```
-Battery+  →  [3A fuse]  →  ┬──  EP-0225 barrel jack IN
-                            └──  INA219 VIN+   (new tap here)
-```
+## Current measurement note
+
+The on-board shunt is 0.1 Ω. The Pi 5 can draw up to 5A at full load:
+
+- 5A × 0.1Ω = 500mV shunt drop — exceeds the INA219's ±320mV shunt amplifier range
+- Current readings will saturate above ~3.2A
+- **Bus voltage readings are always accurate regardless of current**
+
+For this robot, peak logic rail current is ~1–2A (Pi idle + ESP32), well within range.
 
 ---
 
 ## Enabling I2C on Pi
 
 ```bash
-# Verify I2C is enabled (should already be on for most Ubuntu Pi builds)
+# Verify I2C is enabled
 ls /dev/i2c-*          # expect /dev/i2c-1
 
 # Scan for INA219
@@ -78,23 +105,24 @@ sudo i2cdetect -y 1    # expect 0x40
 
 # If i2cdetect not installed:
 sudo apt install i2c-tools
+
+# Add ubuntu user to i2c group (avoids sudo for every read):
+sudo usermod -aG i2c ubuntu
+sudo chmod a+rw /dev/i2c-1   # immediate effect; group takes effect on next login
 ```
 
-If `/dev/i2c-1` doesn't exist, enable I2C:
+If `/dev/i2c-1` doesn't exist:
 ```bash
-sudo raspi-config       # Interface Options → I2C → Enable
-# OR edit /boot/firmware/config.txt:
 echo "dtparam=i2c_arm=on" | sudo tee -a /boot/firmware/config.txt
 sudo reboot
 ```
 
 ---
 
-## Software — smbus2 read
+## Software — pi-ina219
 
-Install driver:
 ```bash
-pip3 install smbus2 pi-ina219
+pip3 install pi-ina219 --break-system-packages
 ```
 
 Quick test:
@@ -108,51 +136,13 @@ print(f"Current: {ina.current():.1f} mA")
 print(f"Power:   {ina.power():.1f} mW")
 ```
 
-Or raw smbus2:
-```python
-import smbus2, struct
-
-bus = smbus2.SMBus(1)
-INA219_ADDR = 0x40
-raw = bus.read_i2c_block_data(INA219_ADDR, 0x02, 2)   # bus voltage register
-val = struct.unpack('>H', bytes(raw))[0]
-voltage_V = (val >> 3) * 0.004   # 4 mV per LSB
-```
-
 ---
 
 ## display_daemon.py integration
 
-When the Pi INA219 is wired, update `display_daemon.py` to read from smbus2 directly instead of the `ros2 topic echo` subprocess:
-
-```python
-from ina219 import INA219
-
-class BatteryReader:
-    def __init__(self):
-        self._ina = INA219(0.1, busnum=1)
-        self._ina.configure()
-        self.voltage = 0.0
-        self.current = 0.0
-        self._last_read = 0.0
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self):
-        while True:
-            try:
-                self.voltage = self._ina.voltage()
-                self.current = self._ina.current() / 1000.0   # mA → A
-                self._last_read = time.monotonic()
-            except Exception as e:
-                print(f"INA219 read error: {e}", flush=True)
-            time.sleep(1.0)
-
-    @property
-    def fresh(self):
-        return self._last_read > 0 and (time.monotonic() - self._last_read < 3.0)
-```
-
-Remove the `ros2 topic echo` subprocess entirely. Battery will be available from the first second of boot, regardless of ESP32 or micro-ROS state.
+`scripts/display_daemon.py` reads from the INA219 directly via pi-ina219.
+The `BatteryReader` class polls at 1 Hz in a background thread.
+No ROS2 subprocess — battery is available from the first second of boot.
 
 ---
 
@@ -161,4 +151,4 @@ Remove the `ros2 topic echo` subprocess entirely. Battery will be available from
 | Unit | Bus | Address | Reader | Purpose |
 |---|---|---|---|---|
 | ESP32 INA219 | ESP32 I2C (GPIO 8/9) | 0x40 | ESP32 firmware | Battery cutoff safety watchdog, publishes `/battery_state` |
-| Pi INA219 | Pi I2C-1 (GPIO 2/3) | 0x40 | smbus2 in display_daemon | Display + health check, always-on regardless of ROS2 |
+| Pi INA219 | Pi I2C-1 (GPIO 2/3) | 0x40 | pi-ina219 in display_daemon | Display + health check, always-on regardless of ROS2 state |
