@@ -11,14 +11,15 @@ from geometry_msgs.msg import Twist
 
 from ina219 import INA219
 
-BAT_FULL_V    = 12.6   # 3S LiPo: 4.2 V/cell
-BAT_CUTOFF_V  = 9.9    # 3S LiPo: 3.3 V/cell — enter cutoff below this
-BAT_RECOVER_V = 10.2   # hysteresis: exit cutoff above this (0.3 V band)
-SHUNT_OHMS    = 0.1    # on-board R100 shunt
-I2C_BUS       = 1      # Pi I2C-1 (GPIO 2/3)
-PUBLISH_HZ    = 1.0
-CUTOFF_HZ     = 40.0   # zero-cmd_vel publish rate during cutoff
-SHUTDOWN_AFTER_S = 30  # seconds below cutoff before OS shutdown to protect battery
+BAT_FULL_V       = 12.6   # 3S LiPo: 4.2 V/cell
+BAT_CUTOFF_V     = 9.9    # 3S LiPo: 3.3 V/cell — enter cutoff below this
+BAT_RECOVER_V    = 10.2   # hysteresis: exit cutoff above this (0.3 V band)
+SHUNT_OHMS       = 0.1    # on-board R100 shunt
+MAX_EXPECTED_A   = 3.0    # logic rail max: Pi5 ~2.5A + ESP32 + sensors at 12V
+I2C_BUS          = 1      # Pi I2C-1 (GPIO 2/3)
+PUBLISH_HZ       = 1.0
+CUTOFF_HZ        = 40.0   # zero-cmd_vel publish rate during cutoff
+SHUTDOWN_AFTER_S = 30     # seconds below cutoff before OS shutdown to protect battery
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,7 @@ class INA219Reader:
         self.voltage = 0.0   # V
         self.current = 0.0   # A
         self.fresh = False
+        self._last_error = ''
         self._lock = threading.Lock()
         self._ina = None
         threading.Thread(target=self._run, daemon=True).start()
@@ -46,10 +48,26 @@ class INA219Reader:
         while True:
             try:
                 if self._ina is None:
-                    self._ina = INA219(SHUNT_OHMS, busnum=I2C_BUS)
-                    self._ina.configure()
+                    self._ina = INA219(SHUNT_OHMS,
+                                       max_expected_amps=MAX_EXPECTED_A,
+                                       busnum=I2C_BUS)
+                    # RANGE_32V: avoids OVF on bus voltage register for any 3S LiPo state.
+                    # GAIN_8_320MV: max shunt voltage 320mV → max current 3.2A at 0.1Ω.
+                    # Without explicit gain, GAIN_AUTO defaults to GAIN_1_40MV (0.4A max)
+                    # which overflows immediately on a loaded logic rail.
+                    self._ina.configure(
+                        voltage_range=INA219.RANGE_32V,
+                        gain=INA219.GAIN_8_320MV,
+                    )
                 v = self._ina.voltage()
                 i = self._ina.current() / 1000.0  # mA → A
+
+                # Sanity check: voltage must be in a plausible range for a 3S LiPo.
+                # 32.76V = OVF flag set; <1V = sensor not connected or shorted.
+                if not (1.0 <= v <= 20.0):
+                    raise ValueError(f'INA219 voltage out of range: {v:.2f}V '
+                                     f'(OVF or wiring fault)')
+
                 with self._lock:
                     self.voltage = v
                     self.current = i
@@ -58,11 +76,12 @@ class INA219Reader:
                 self._ina = None
                 with self._lock:
                     self.fresh = False
+                    self._last_error = str(e)
             time.sleep(1.0 / PUBLISH_HZ)
 
     def read(self):
         with self._lock:
-            return self.voltage, self.current, self.fresh
+            return self.voltage, self.current, self.fresh, self._last_error
 
 
 class BatteryPublisherNode(Node):
@@ -97,7 +116,7 @@ class BatteryPublisherNode(Node):
             f'cutoff={BAT_CUTOFF_V}V recover={BAT_RECOVER_V}V')
 
     def _publish_battery(self):
-        voltage, current, fresh = self._reader.read()
+        voltage, current, fresh, last_error = self._reader.read()
 
         msg = BatteryState()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -111,7 +130,7 @@ class BatteryPublisherNode(Node):
             msg.percentage = max(0.0, min(1.0, pct))
         else:
             self.get_logger().warn(
-                'INA219 read failed — publishing stale battery state',
+                f'INA219 read failed — {last_error or "unknown error"}',
                 throttle_duration_sec=10.0)
 
         self._pub.publish(msg)
