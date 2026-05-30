@@ -463,6 +463,8 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - Never change serial device, encoder pins, motor polarity, or controller YAML all at once during debugging. Change one thing, observe, repeat.
 - If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart microros-agent.service`.
 - **Before flashing firmware:** always `sudo systemctl stop microros-agent.service && sudo systemctl mask microros-agent.service` first. The service auto-restarts independently of `robot-launch.service` and grabs `/dev/ttyACM0` mid-write. Unmask and restart after flash completes.
+- **~200 ms gaps on `/diff_cont/odom` and `/imu/imu` are telemetry-only — they do not indicate control-loop stalls.** Validated 2026-05-30: CH340 timing test ran 35 s with zero `[WARN] control dt > 15 ms` events. The 100 Hz PID loop runs clean throughout. The gap is in the micro-ROS 30 Hz publish path (executor/USB CDC), not in motor control. Root cause of worst-case gaps: zombie `ros2 bag record` processes creating DDS congestion — always kill stale bag processes before testing (`pkill -f 'ros2 bag record'`). Residual ~200 ms gap with clean graph is a known micro-ROS/USB CDC timing artifact; it does not affect closed-loop control quality.
+- **Control loop timing guard (permanent):** firmware fires `Serial0.printf("[WARN] control dt %.2f ms\n", dt_ms)` on CH340 (`/dev/ttyUSB0`, 115200 baud) if any 100 Hz loop iteration exceeds 15 ms. Zero warnings = loop is healthy. This check costs nothing at runtime and gives instant proof of stalls if they ever appear.
 
 ### SLAM / Costmaps
 - LiDAR is mounted low — detects chair legs and shoes as walls. Mitigate with RealSense depth validation and layered costmaps.

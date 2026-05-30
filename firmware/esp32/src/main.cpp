@@ -86,7 +86,11 @@ void loop() {
     // -----------------------------------------------------------------------
     if (now - last_control_ms >= 10) {
         float dt = (now - last_control_ms) / 1000.0f;
+        float dt_ms = dt * 1000.0f;
         last_control_ms = now;
+        if (dt_ms > 15.0f) {
+            Serial0.printf("[WARN] control dt %.2f ms\n", dt_ms);
+        }
 
         if (now - microros_last_cmd_ms() > WATCHDOG_MS) {
             // No command received in time — safe stop and reset integrators
