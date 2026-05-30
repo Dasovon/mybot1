@@ -56,15 +56,22 @@ class LGPIOAdapter:
         lgpio.gpiochip_close(self._handle)
 
 
+EMA_ALPHA = 0.1   # smoothing factor for display voltage — raw value goes to ROS
+
+
 class BatteryReader:
     """Reads voltage and current directly from INA219 on Pi I2C-1 (0x40).
     Polls at 1 Hz in a background thread. Available from first boot,
     independent of ROS2 and micro-ROS session state.
+
+    voltage/current are raw (used by battery_node for telemetry).
+    smoothed_voltage is EMA-filtered for display only.
     """
 
     def __init__(self):
-        self.voltage = 0.0
-        self.current = 0.0  # Amps
+        self.voltage = 0.0          # raw, published to ROS
+        self.current = 0.0          # Amps, raw
+        self.smoothed_voltage = 0.0 # EMA-filtered, display only
         self._last_read = 0.0
         self._ina = None
         threading.Thread(target=self._run, daemon=True).start()
@@ -75,8 +82,14 @@ class BatteryReader:
                 if self._ina is None:
                     self._ina = INA219(0.1, busnum=1)
                     self._ina.configure()
-                self.voltage = self._ina.voltage()
+                v = self._ina.voltage()
                 self.current = self._ina.current() / 1000.0  # mA → A
+                self.voltage = v
+                # Seed smoothed on first read; apply EMA thereafter
+                if self.smoothed_voltage == 0.0:
+                    self.smoothed_voltage = v
+                else:
+                    self.smoothed_voltage = EMA_ALPHA * v + (1 - EMA_ALPHA) * self.smoothed_voltage
                 self._last_read = time.monotonic()
             except Exception:
                 self._ina = None  # force re-init on next iteration
@@ -88,7 +101,7 @@ class BatteryReader:
 
     @property
     def pct(self):
-        p = (self.voltage - BAT_CUTOFF_V) / (BAT_FULL_V - BAT_CUTOFF_V) * 100.0
+        p = (self.smoothed_voltage - BAT_CUTOFF_V) / (BAT_FULL_V - BAT_CUTOFF_V) * 100.0
         return max(0, min(100, int(p)))
 
 
@@ -122,36 +135,47 @@ def render(device, bat: BatteryReader):
         font = ImageFont.load_default()
 
     hostname = socket.gethostname()
+    last_pct = -1  # track last displayed percent for hysteresis
 
     while True:
-        img  = Image.new('1', (device.width, device.height), 0)
-        draw = ImageDraw.Draw(img)
-
         cpu    = psutil.cpu_percent(interval=None)
         ram    = psutil.virtual_memory().percent
         temps  = psutil.sensors_temperatures().get('cpu_thermal', [])
         temp_c = temps[0].current if temps else 0.0
         ip     = get_ip()
 
+        pct = bat.pct if bat.fresh else 0
+
+        uptime_s = int(time.monotonic())
+        h, rem = divmod(uptime_s, 3600)
+        m = rem // 60
+
+        # Only redraw if battery percent changed by ≥1% or every ~5s for other fields
+        needs_redraw = (abs(pct - last_pct) >= 1) or (uptime_s % 5 == 0)
+        if not needs_redraw:
+            time.sleep(1.0 / UPDATE_HZ)
+            continue
+
+        last_pct = pct
+
+        img  = Image.new('1', (device.width, device.height), 0)
+        draw = ImageDraw.Draw(img)
+
         draw.text((0, 0), f'{hostname}  {ip}', font=font, fill=1)
 
         bar_w, bar_h = 96, 10
-        pct = bat.pct if bat.fresh else 0
         _draw_battery_bar(draw, 0, 12, bar_w, bar_h, pct)
         pct_str = f'{pct:3d}%' if bat.fresh else ' -- '
         draw.text((bar_w + 5, 13), pct_str, font=font, fill=1)
 
         if bat.fresh:
-            row3 = f'{bat.voltage:.1f}V {bat.current:.2f}A T:{temp_c:.0f}C'
+            row3 = f'{bat.smoothed_voltage:.1f}V {bat.current:.2f}A T:{temp_c:.0f}C'
         else:
             row3 = f'no battery  T:{temp_c:.0f}C'
         draw.text((0, 24), row3, font=font, fill=1)
 
         draw.text((0, 36), f'CPU:{cpu:3.0f}%   RAM:{ram:3.0f}%', font=font, fill=1)
 
-        uptime_s = int(time.monotonic())
-        h, rem = divmod(uptime_s, 3600)
-        m = rem // 60
         bat_str = 'BAT:OK' if bat.fresh else 'BAT:--'
         draw.text((0, 50), f'{bat_str}   up {h}h{m:02d}m', font=font, fill=1)
 
