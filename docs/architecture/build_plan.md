@@ -71,7 +71,7 @@ Do not route motor power and logic power through the same wire or terminal.
 #### Decoupling capacitors — place as you add each component
 - **TB6612 VM/GND**: 100µF electrolytic + 100nF ceramic in parallel, close to the VM and GND pins.
 - **Each I2C sensor VCC**: 100nF ceramic close to the sensor's VCC pin.
-- **GPIO 40/41 (left encoder only)**: 100nF ceramic from each GPIO line to GND, placed on the breadboard as close to the ESP32 pin as possible. These GPIOs pick up 20 kHz motor PWM switching noise and caps are not optional.
+- **GPIO 40/41 (left encoder only)**: 100nF ceramic from each GPIO line to GND, placed on the breadboard as close to the ESP32 pin as possible. Caps are not optional — a bad breadboard section in the signal path was confirmed (2026-05-30) as a source of EMI issues independent of pin quality.
 
 #### Cable routing
 - Motor power cables and signal cables (I2C, encoder, USB) must travel separately.
@@ -1042,19 +1042,15 @@ set_microros_serial_transports(Serial1);
 
 **Step 2 — Motor driver**
 Implement TB6612 control using ESP32 LEDC peripheral. GPIO map:
-- PWMA (GPIO 10) → right motor, LEDC ch 0, **20 kHz**, 8-bit
+- PWMA (GPIO 10) → right motor, LEDC ch 0, **1 kHz**, 8-bit
 - AIN1/AIN2 (GPIO 11/12) → right direction
-- PWMB (GPIO 13) → left motor, LEDC ch 1, **20 kHz**, 8-bit
+- PWMB (GPIO 13) → left motor, LEDC ch 1, **1 kHz**, 8-bit
 - BIN1/BIN2 (GPIO 14/15) → left direction
 
 Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop()`.
 
-**Step 3 — Encoder ISR**
-Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.033 m`.
-
-EMA filter (`VEL_ALPHA`) is **not needed** when using PCNT — the hardware glitch filter (`setFilter(400)`) suppresses GPIO 40/41 PWM noise. Set `VEL_ALPHA = 1.0` (identity). Reintroduce EMA only if raw velocity is too noisy on a different chassis.
-
-> **Recommended upgrade:** The ESP32-S3 PCNT (Pulse Counter) peripheral provides hardware quadrature decoding with a built-in glitch filter — no ISR, no EMA filter, no CPU overhead. Use the [ESP32Encoder](https://github.com/madhephaestus/ESP32Encoder) library (`madhephaestus/ESP32Encoder`). Replace the `attachInterrupt` + EMA approach with PCNT in Phase 1 firmware for cleaner, lower-jitter encoder counts. The EMA approach in the test sketch above is still valid for Phase 0 bench verification.
+**Step 3 — Encoders (PCNT)**
+Use the `ESP32Encoder` library (`madhephaestus/ESP32Encoder`) for hardware quadrature decoding via PCNT. GPIO 42/39 = right encoder, GPIO 40/41 = left encoder. Call `setFilter(400)` on both — rejects pulses <5 µs, eliminates motor PWM switching noise without CPU overhead. `VEL_ALPHA = 1.0` (EMA disabled). Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.03414 m`. Right encoder must be negated (physically mounted mirrored) in both velocity computation and odometry integration.
 
 **Step 4 — PID controller**
 One PID instance per wheel. Input: measured wheel velocity (rad/s). Output: PWM command. Run at 100 Hz in a FreeRTOS task or `loop()`. Expose tunable Kp, Ki, Kd constants via `#define` in a header.
