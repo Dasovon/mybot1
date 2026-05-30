@@ -27,8 +27,19 @@ BAG_DIR=~/test_logs/test_$(date +%Y%m%d_%H%M%S)
 mkdir -p ~/test_logs
 
 echo "=== motor_test.sh ==="
-echo "  vx=${VX} m/s  duration=${DURATION}s  (${TIMES} publishes at ${RATE} Hz)"
+echo "  vx=${VX} m/s  duration=${DURATION}s  (~$(echo "$VX * $DURATION" | bc) m travel)"
 echo "  bag: ${BAG_DIR}"
+echo ""
+echo "┌─────────────────────────────────────────────────────┐"
+echo "│  PRE-TEST CHECKLIST                                 │"
+echo "│                                                     │"
+echo "│  1. Place robot at start mark, pointed straight     │"
+echo "│  2. Ensure $(echo "$VX * $DURATION" | bc) m of clear space ahead          │"
+echo "│  3. Keep hands clear — robot will move on its own   │"
+echo "│  4. Emergency stop: Ctrl+C  (watchdog fires in 0.5s)│"
+echo "└─────────────────────────────────────────────────────┘"
+echo ""
+read -r -p "Robot in position and clear? Press Enter to start, Ctrl+C to abort: "
 echo ""
 
 # ── 1. Start bag ─────────────────────────────────────────────────────────────
@@ -63,7 +74,7 @@ for i in $(seq 1 ${STOP_TIMES}); do
 done
 echo "[3] Stop sent."
 echo ""
-echo "=== CONFIRM ROBOT IS STATIONARY ==="
+read -r -p "Confirm robot is stationary, then press Enter to analyze: "
 echo ""
 
 # ── 4. Stop bag and validate ──────────────────────────────────────────────────
