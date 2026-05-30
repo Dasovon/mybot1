@@ -10,10 +10,12 @@ void encoders_init() {
 
     // Half-quadrature: counts both edges of channel A, uses B for direction.
     enc_left.attachHalfQuad(ENC_L_A, ENC_L_B);
+    enc_left.setFilter(400);  // 400 APB ticks ≈ 5 µs — rejects PWM switching spikes
     Serial0.printf("[ENC] left  attachHalfQuad A=GPIO%d B=GPIO%d  count after attach=%lld\n",
                    ENC_L_A, ENC_L_B, enc_left.getCount());
 
     enc_right.attachHalfQuad(ENC_R_A, ENC_R_B);
+    enc_right.setFilter(400);
     Serial0.printf("[ENC] right attachHalfQuad A=GPIO%d B=GPIO%d  count after attach=%lld\n",
                    ENC_R_A, ENC_R_B, enc_right.getCount());
 

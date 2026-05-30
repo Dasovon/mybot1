@@ -105,3 +105,84 @@ cd ~/bot_ws && python3 -m pytest src/<package>/test/test_<module>.py -v
 Every phase gate in `docs/architecture/build_plan.md` must have a corresponding protocol in `docs/testing/`. File naming:
 - `<phase>_test_protocol_<YYYY-MM-DD>.md` for the checklist
 - `<phase>_validation_<YYYY-MM-DD>.md` for the recorded run result
+
+---
+
+## Data capture rules — mandatory for all motor tests
+
+**Every motor test must be recorded.** Before issuing any `cmd_vel` command, start a bag capture. Do not analyze from memory or from a single `echo --once` snapshot.
+
+### Standard capture command (run on Pi before every motor test)
+
+```bash
+# Run this first — before the cmd_vel publisher
+ros2 bag record \
+  /diff_cont/cmd_vel_unstamped \
+  /diff_cont/odom \
+  /imu/imu \
+  /battery_state \
+  -o ~/test_logs/test_$(date +%Y%m%d_%H%M%S)
+```
+
+`/diff_cont/cmd_vel_unstamped` is included so commanded vs. measured velocity can be compared in the same bag.
+
+### Why each topic is required
+
+| Topic | Rate | What to look for |
+|---|---|---|
+| `/diff_cont/odom` | 30 Hz | Encoder-derived wheel velocity. Compare `twist.linear.x` and `twist.angular.z` vs. commanded. This is the primary PID tracking signal. |
+| `/imu/imu` | 30 Hz | `angular_velocity.z` reveals yaw rate during a commanded straight drive — should be near zero. `linear_acceleration.x` reveals jerk: spikes indicate abrupt starts/stops or oscillation. Use this to detect PID overshoot and mechanical chatter. |
+| `/battery_state` | 1 Hz | `voltage` and `current` under motor load. Current spikes indicate stall or aggressive PID output. Voltage sag under load flags power supply issues. |
+| `/diff_cont/cmd_vel_unstamped` | 20 Hz | Records exactly what was commanded. Confirms the publisher ran at the intended rate and lets you overlay command vs. response. |
+
+### Analysis requirements
+
+After every motor test, report all of the following before changing any parameter:
+
+1. **Velocity tracking** — plot or tabulate `cmd_vel.linear.x` vs `odom.twist.linear.x` over time. Compute steady-state error as a percentage of commanded velocity.
+2. **Yaw drift** — report `imu.angular_velocity.z` mean and peak during the run. A value above ±0.05 rad/s during a straight-drive command indicates wheel imbalance.
+3. **Jerk / oscillation** — report `imu.linear_acceleration.x` peak-to-peak. Values above ±1.0 m/s² indicate PID oscillation or mechanical issues.
+4. **Current draw** — report `battery_state.current` mean and peak. A peak above 2× steady-state current suggests stall or windup.
+5. **Distance accuracy** — report `odom.pose.pose.position.x` at end of run vs. expected (`cmd_vel * duration`).
+
+### Bag playback on dev PC
+
+```bash
+# List bag contents
+ros2 bag info ~/test_logs/<bag_name>
+
+# Play back (Pi or dev PC)
+ros2 bag play ~/test_logs/<bag_name>
+
+# Extract to CSV for analysis (dev PC)
+ros2 bag convert -i ~/test_logs/<bag_name> -o /tmp/bag_csv --output-format csv
+```
+
+### Rule summary
+
+- **No motor test without a bag running.** If you forget to start the bag, re-run the test.
+- **No parameter change without completing the full 5-point analysis above.** Single-metric reasoning (e.g. "position moved, looks good") is not sufficient.
+- **All sensor streams are always recorded, even if only one is under investigation.** IMU, encoder, and INA219 interact — a problem that looks like a PID issue may be an EMI issue visible only in IMU jerk, or a power issue visible only in current draw.
+
+---
+
+## After-test stop rule
+
+After every motor test or data capture, **stop immediately and present the data to the user before doing anything else.**
+
+Do not:
+- Proceed to analysis without pausing
+- Queue a follow-up command
+- Change a parameter
+- Re-run the test
+- Diagnose and propose a fix in the same turn as collecting data
+
+Do:
+1. Present the raw results (bag info, topic counts, key numbers)
+2. State clearly what the data shows and what problem it reveals
+3. State what you propose to do next and why
+4. **Wait for the user to confirm direction before acting**
+
+This applies even if the result is obviously wrong or the bag is corrupt. Stop, report, wait.
+
+**Why:** The user needs to see the data independently before any interpretation is applied. A diagnosis that looks obvious from one metric may be wrong when the user sees the full picture. Acting on incomplete or misread data wastes a test run and can introduce bad parameter changes.

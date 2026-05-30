@@ -159,6 +159,41 @@ Verify after reboot:
 vcgencmd get_throttled   # expect 0x0 — no throttling or undervoltage events
 ```
 
+### NVMe boot — fstab label mismatch (read-only filesystem on every boot)
+
+**Symptom:** After flashing Ubuntu to NVMe, the Pi boots with `/` mounted read-only. All services that write to disk fail (ROS logging, systemd-tmpfiles, etc.). `mount | grep ' / '` shows `ro,relatime`.
+
+**Root cause:** The Ubuntu image writes `LABEL=writable` in `/etc/fstab`, but the NVMe installation relabels the root partition `nvme-writable`. `systemd-remount-fs` looks up `LABEL=writable`, can't find it, and silently leaves the filesystem read-only.
+
+**Diagnosis:**
+```bash
+# Confirm label mismatch:
+sudo blkid /dev/nvme0n1p2   # shows LABEL="nvme-writable"
+cat /etc/fstab              # shows LABEL=writable  ← wrong
+journalctl -b 0 | grep "can't find LABEL"  # confirms remount-fs failure
+```
+
+**Fix (already applied to this Pi):**
+```bash
+# Remount rw temporarily so fstab can be edited:
+sudo mount -o remount,rw /dev/nvme0n1p2 /
+
+# Correct the label in fstab:
+sudo sed -i 's/LABEL=writable/LABEL=nvme-writable/' /etc/fstab
+
+# Reboot — filesystem will now mount rw from the start:
+sudo reboot
+```
+
+**Verify after reboot:**
+```bash
+mount | grep ' / '   # must show rw,relatime — not ro
+```
+
+**If reflashing to NVMe:** run the fix immediately after first boot before starting any services.
+
+---
+
 ### udev rules — static device names
 ```bash
 # /etc/udev/rules.d/99-robot.rules
