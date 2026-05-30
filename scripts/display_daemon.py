@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """
 OLED display daemon for mybot1 — systemd service on Pi.
-Reads Pi system stats via psutil and battery data from the ROS2
-/battery_state topic via a ros2 topic echo subprocess (avoids rclpy
-threading / DDS initialization issues in a long-running service).
+Reads Pi system stats via psutil and battery data directly from the
+INA219 on the Pi I2C-1 bus (0x40) via pi-ina219 / smbus2.
 
 Display: Waveshare 2.42" SSD1309, 128x64, SPI0
 GPIO: DC=GPIO25, RST=GPIO27 (BCM, gpiochip4 on Pi 5)
-Battery: /battery_state at 1 Hz from ESP32 micro-ROS
+Battery: INA219 at 0x40 on Pi I2C-1 (GPIO 2/3), polled at 1 Hz
 """
 
 import signal
 import socket
-import subprocess
 import sys
 import threading
 import time
 
 import lgpio
 import psutil
+from ina219 import INA219
 from luma.core.interface.serial import spi
 from luma.oled.device import ssd1309
 from PIL import Image, ImageDraw, ImageFont
@@ -32,11 +31,6 @@ UPDATE_HZ = 2
 
 BAT_FULL_V   = 12.6
 BAT_CUTOFF_V = 9.9
-
-_ROS_SOURCE = (
-    'source /opt/ros/jazzy/setup.bash && '
-    'source /home/ubuntu/microros_ws/install/setup.bash'
-)
 
 
 class LGPIOAdapter:
@@ -63,71 +57,34 @@ class LGPIOAdapter:
 
 
 class BatteryReader:
-    """Reads /battery_state by spawning a ros2 topic echo subprocess.
-    Self-heals: kills and restarts the subprocess if no message is received
-    for STALE_RESTART_S seconds, so DDS re-discovery after session cycling
-    is forced rather than waited on.
+    """Reads voltage and current directly from INA219 on Pi I2C-1 (0x40).
+    Polls at 1 Hz in a background thread. Available from first boot,
+    independent of ROS2 and micro-ROS session state.
     """
-    STALE_RESTART_S = 15.0
 
     def __init__(self):
         self.voltage = 0.0
-        self.current = 0.0
-        self._last_msg_time = 0.0
-        self._proc = None
+        self.current = 0.0  # Amps
+        self._last_read = 0.0
+        self._ina = None
         threading.Thread(target=self._run, daemon=True).start()
-        threading.Thread(target=self._watchdog, daemon=True).start()
-
-    def _spawn(self):
-        cmd = (f'{_ROS_SOURCE} && export PYTHONUNBUFFERED=1 && '
-               f'exec ros2 topic echo --qos-reliability reliable /battery_state')
-        self._proc = subprocess.Popen(
-            ['bash', '-c', cmd],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, bufsize=1,
-        )
-        return self._proc
 
     def _run(self):
         while True:
             try:
-                proc = self._spawn()
-                for line in proc.stdout:
-                    line = line.strip()
-                    if line.startswith('voltage:'):
-                        try:
-                            self.voltage = float(line.split()[1])
-                            self._last_msg_time = time.monotonic()
-                        except (IndexError, ValueError):
-                            pass
-                    elif line.startswith('current:'):
-                        try:
-                            self.current = float(line.split()[1])
-                        except (IndexError, ValueError):
-                            pass
-                proc.wait()
+                if self._ina is None:
+                    self._ina = INA219(0.1, busnum=1)
+                    self._ina.configure()
+                self.voltage = self._ina.voltage()
+                self.current = self._ina.current() / 1000.0  # mA → A
+                self._last_read = time.monotonic()
             except Exception:
-                pass
-            self._proc = None
-            time.sleep(5)
-
-    def _watchdog(self):
-        """Kills the subprocess if no message arrives within STALE_RESTART_S,
-        forcing _run() to spawn a fresh one and re-do DDS discovery."""
-        while True:
-            time.sleep(self.STALE_RESTART_S)
-            if self._proc is not None:
-                stale = (self._last_msg_time == 0.0 or
-                         time.monotonic() - self._last_msg_time > self.STALE_RESTART_S)
-                if stale:
-                    try:
-                        self._proc.kill()
-                    except Exception:
-                        pass
+                self._ina = None  # force re-init on next iteration
+            time.sleep(1.0)
 
     @property
     def fresh(self):
-        return self._last_msg_time > 0 and (time.monotonic() - self._last_msg_time < 10.0)
+        return self._last_read > 0 and (time.monotonic() - self._last_read < 3.0)
 
     @property
     def pct(self):
@@ -187,7 +144,7 @@ def render(device, bat: BatteryReader):
         if bat.fresh:
             row3 = f'{bat.voltage:.1f}V {bat.current:.2f}A T:{temp_c:.0f}C'
         else:
-            row3 = f'no ROS2     T:{temp_c:.0f}C'
+            row3 = f'no battery  T:{temp_c:.0f}C'
         draw.text((0, 24), row3, font=font, fill=1)
 
         draw.text((0, 36), f'CPU:{cpu:3.0f}%   RAM:{ram:3.0f}%', font=font, fill=1)
@@ -195,8 +152,8 @@ def render(device, bat: BatteryReader):
         uptime_s = int(time.monotonic())
         h, rem = divmod(uptime_s, 3600)
         m = rem // 60
-        ros_str = 'ROS:OK' if bat.fresh else 'ROS:--'
-        draw.text((0, 50), f'{ros_str}   up {h}h{m:02d}m', font=font, fill=1)
+        bat_str = 'BAT:OK' if bat.fresh else 'BAT:--'
+        draw.text((0, 50), f'{bat_str}   up {h}h{m:02d}m', font=font, fill=1)
 
         device.display(img)
         time.sleep(1.0 / UPDATE_HZ)
