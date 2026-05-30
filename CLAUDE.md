@@ -80,23 +80,23 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, TB6612FNG GND — al
 |---|---|
 | 8 | I2C SDA — BNO055 (0x28), BME680 (0x76 planned) |
 | 9 | I2C SCL |
-| 10 | PWMA — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → TB6612FNG PWMA |
+| 10 | PWMA — Right side speed (LEDC ch 0, 1 kHz, 8-bit) → TB6612FNG PWMA |
 | 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
 | 12 | AIN2 — Right side direction 2 → TB6612FNG AIN2 |
-| 13 | PWMB — Left side speed (LEDC ch 1, 20 kHz, 8-bit) → TB6612FNG PWMB |
+| 13 | PWMB — Left side speed (LEDC ch 1, 1 kHz, 8-bit) → TB6612FNG PWMB |
 | 14 | BIN1 — Left side direction 1 → TB6612FNG BIN1 |
 | 15 | BIN2 — Left side direction 2 → TB6612FNG BIN2 |
 | 17 | (free — UART1 not used for micro-ROS; CH340 connects to UART0 GPIO 43/44) |
 | 18 | (free) |
 | 19, 20 | Native USB D−/D+ — micro-ROS transport + flashing → Pi `/dev/ttyACM0` |
-| 39 | Right encoder B (read in ISR) |
-| 40 | Left encoder A — `attachInterrupt` CHANGE ⚠️ EMI |
-| 41 | Left encoder B (read in ISR) ⚠️ EMI |
-| 42 | Right encoder A — `attachInterrupt` CHANGE |
+| 39 | Right encoder B (PCNT) |
+| 40 | Left encoder A (PCNT) ⚠️ breadboard cap required |
+| 41 | Left encoder B (PCNT) ⚠️ breadboard cap required |
+| 42 | Right encoder A (PCNT) |
 
 **Right side = front_right + rear_right motors in parallel. Left side = front_left + rear_left motors in parallel.**
 
-⚠️ **GPIO 40/41 EMI:** Left encoder picks up TB6612FNG 20 kHz PWM switching noise. EMA filter (`VEL_ALPHA = 0.2`) mitigates in firmware. Hardware fix: route left encoder wires through a breadboard with 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND before connecting to ESP32.
+⚠️ **GPIO 40/41 EMI:** Left encoder signal path requires 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND on the breadboard. The root EMI cause was a bad breadboard section (confirmed 2026-05-30 by GPIO swap test) — not the ESP32 pins themselves. Firmware uses PCNT (`ESP32Encoder` library, `setFilter(400)`) for hardware glitch filtering; `VEL_ALPHA = 1.0` (EMA disabled). Do not reintroduce EMA unless raw velocity is noisy on a different chassis.
 
 **Avoid:** GPIO 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (internal flash), 38 (RGB LED on DevKitC-1 — but Lonely Binary uses GPIO 48 for RGB LED), 43/44 (UART0 / CH340), 0/45/46 (strapping pins).
 GPIO 19/20 = native USB CDC (micro-ROS + flashing — do not repurpose). GPIO 43/44 = UART0 via CH340 (display telemetry Phase 6).
@@ -163,7 +163,7 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 | `/diff_cont/cmd_vel_unstamped` | Nav2 / twist_mux | ESP32 (via micro-ROS) | 20 Hz |
 | `/diff_cont/odom` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
 | `/imu/imu` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
-| `/battery_state` | Pi `battery_publisher` node (INA219 via smbus2) | monitoring nodes, display | 1 Hz |
+| `/battery_state` | Pi `battery_publisher` node (INA219 via pi-ina219 library) | monitoring nodes, display | 1 Hz |
 | `/odom` | robot_localization | Nav2, SLAM | 20 Hz |
 | `/scan` | rplidar_node | slam_toolbox, Nav2 obstacle layer | ~5.5 Hz |
 | `/camera/camera/depth/color/points` | realsense2_camera | Nav2 voxel layer | ~13 Hz |
@@ -433,9 +433,9 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - **Dev PC failure must never cause a dangerous robot.**
 
 ### Electrical
-- All subsystems share one common ground: Battery −, ESP32, Pi, MDD10A, encoders, sensors.
+- All subsystems share one common ground: Battery −, ESP32, Pi, TB6612FNG, encoders, sensors.
 - Missing common ground causes serial errors, PWM noise, encoder EMI, and motor glitches.
-- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND — MDD10A 20 kHz PWM couples into these lines. Use a breadboard with caps in the encoder signal path.
+- GPIO 40/41 (left encoder) require 100 nF ceramic caps to GND. Root cause of EMI was a bad breadboard section in the signal path, not the ESP32 pins. Caps are still required to guard against future noise.
 
 ### Motion Control
 - Closed-loop PID velocity control only (encoder feedback → wheel velocity target in rad/s).
@@ -637,6 +637,9 @@ GPIO 19/20 = native USB CDC = micro-ROS on `/dev/ttyACM0` (this is correct). GPI
 States `Raspberry Pi OS Trixie (Pi)`. The Pi runs **Ubuntu Server 24.04 LTS**, not Raspberry Pi OS.
 
 ### Warning — code quality / maintainability
+
+**~~`battery_node.py` INA219 configured with GAIN_AUTO default causing 32.76V / NaN~~** ✅ FIX COMMITTED 2026-05-30 — verify next session
+`configure()` without `max_expected_amps` initialised with `GAIN_1_40MV` (max 0.4A at 0.1Ω). Logic rail draws well over 0.4A, triggering OVF. Bus voltage register reads 0x7FFF = 32.764V; current() garbage. Fix: `INA219(SHUNT_OHMS, max_expected_amps=3.0)` + `configure(voltage_range=RANGE_32V, gain=GAIN_8_320MV)` + voltage sanity check (1–20V). **Do not trust low-voltage cutoff until confirmed reading correctly (expect ~9.9–12.6V).**
 
 **`firmware/esp32/src/motors.cpp` uses deprecated arduino-esp32 2.x LEDC API**
 `ledcSetup()` and `ledcAttachPin()` are the 2.x API. `platformio.ini` pins `espressif32@^6.8.0` which bundles arduino-esp32 **3.2.x**, where these are deprecated. The code compiles via backwards-compat shims but generates warnings and is one platform upgrade away from breaking. The 3.x replacements are `ledcAttach(pin, freq, resolution)` and `ledcWrite(pin, duty)`.

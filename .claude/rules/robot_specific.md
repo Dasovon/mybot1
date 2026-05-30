@@ -56,7 +56,7 @@ Costmap layers (in order):
 - Closed-loop PID velocity control only — encoder feedback → wheel velocity target in rad/s
 - Never use open-loop PWM for normal operation
 - Motor A = RIGHT wheel, Motor B = LEFT wheel — do not swap
-- PWM frequency: **20 kHz** (LEDC) — inaudible motor whine, negligible heat increase on TB6612FNG
+- PWM frequency: **1 kHz** (LEDC) — validated on this chassis. 20 kHz caused a 10× measured speed loss; do not change without re-validating on hardware.
 - PID loop rate: 100 Hz
 
 PID output mapping:
@@ -70,7 +70,7 @@ duty = constrain(duty, 0, 255);
 
 - Watchdog must run on ESP32 independently of ROS, Wi-Fi, and dev PC
 - If no `/diff_cont/cmd_vel_unstamped` received within timeout: stop motors immediately
-- Battery voltage cutoff runs on ESP32 — never depend on ROS for battery safety
+- Battery voltage cutoff runs on the **Pi** (`battery_publisher` node, `esp32_serial_bridge` package) — not on the ESP32. Do not depend on ROS cutoff until INA219 reads correctly (see Audit Notes in CLAUDE.md).
 - Dev PC failure must never cause a dangerous robot
 
 Watchdog pattern in firmware:
@@ -87,11 +87,13 @@ void check_watchdog() {
 
 ## GPIO 40/41 EMI mitigation
 
-Left encoder (GPIO 40/41) picks up TB6612 20 kHz PWM switching noise. Two mitigations required:
-1. **Hardware**: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the encoder signal path (breadboard caps before ESP32 pins)
-2. **Firmware (fallback)**: EMA velocity filter — `VEL_ALPHA = 0.2`
+**Current state (validated 2026-05-30):** PCNT (`ESP32Encoder` library, `setFilter(400)`) is active. EMA filter is disabled (`VEL_ALPHA = 1.0`). Hardware caps are in place.
 
-**Preferred firmware approach**: Use the ESP32-S3 PCNT hardware pulse counter (ESP32Encoder library — `madhephaestus/ESP32Encoder`) instead of `attachInterrupt` + EMA. PCNT has a built-in glitch filter, runs in hardware, and produces cleaner quadrature counts with no CPU overhead. Hardware caps are still required regardless of encoder approach.
+Root cause of the EMI issue was a **bad breadboard section** in the encoder signal path (confirmed by GPIO swap test — right encoder counted cleanly on 40/41, proving ESP32 pins were fine). The 100 nF caps are still required regardless.
+
+Hardware requirement: 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND in the encoder signal path (breadboard caps before ESP32 pins).
+
+Firmware: `setFilter(400)` rejects pulses <5 µs, handling motor switching noise in hardware. Do not remove. Do not reintroduce EMA unless raw velocity is noisy on a different chassis — EMA phase lag makes KD unstable.
 
 ## BNO055 on ESP32-S3 compatibility
 
