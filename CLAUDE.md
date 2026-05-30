@@ -558,12 +558,19 @@ Format as a table or clearly labeled sections. Include specific numbers — not 
 
 ### Before Changing Things
 
-When about to make a non-trivial firmware or config change, or when hitting an error with multiple possible causes:
+**HARD RULE: Before any non-trivial change, explain what and why, then stop and wait for explicit confirmation. Do not write a single line of code or config until the user says to proceed.**
 
-1. **Pause and explain:** what the problem is, what change is being considered, what the tradeoffs are.
-2. **Wait for the user to confirm direction** before proceeding.
+Non-trivial means: any firmware change, any build or flash, any script or config edit, any rules file edit, any platformio.ini change, any change with more than one possible approach.
 
-The user guides the process — do not make architectural decisions and present finished diffs.
+**Required format before acting:**
+1. **What:** exactly which file(s) and what changes
+2. **Why:** what hypothesis it tests, what problem it solves
+3. **Tradeoff/risk:** what could go wrong or what is being sacrificed
+4. **Stop.** Do not proceed until the user explicitly confirms.
+
+**What does NOT need a pause:** reads, greps, `ros2 topic hz`, `git status`, `git log`, diagnostic SSH commands, committing already-approved changes, deploying a file already approved.
+
+The user guides every decision. Do not present finished diffs of changes that were never discussed.
 
 ### Development Order (summary)
 
