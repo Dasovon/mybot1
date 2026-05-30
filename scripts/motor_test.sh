@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# motor_test.sh — safe ROS velocity test with mandatory bag capture
+# motor_test.sh — safe ROS velocity test with bag capture and inline analysis
 #
 # Usage (run on Pi):
-#   ./motor_test.sh [vx_m_s] [duration_s]
-#   ./motor_test.sh 0.10 8       # 0.10 m/s for 8 s (default)
+#   ~/motor_test.sh [vx_m_s] [duration_s]
+#   ~/motor_test.sh 0.10 8       # 0.10 m/s for 8 s (default)
 #
-# What it does:
-#   1. Starts bag recording all required topics
-#   2. Publishes drive cmd_vel IN THE FOREGROUND (blocks until done)
-#   3. Sends explicit stop for 1 second IN THE FOREGROUND
-#   4. Stops bag cleanly
+# Sequence:
+#   1. Start bag (sqlite3, detached from shell)
+#   2. Drive foreground
+#   3. Stop foreground
+#   4. Stop bag, verify metadata + sanity gates
+#   5. Analyze only if all gates pass
 #
 # SAFETY: no background cmd_vel publishers. Ever.
-
-set -e
 
 source /opt/ros/jazzy/setup.bash
 source ~/bot_ws/install/setup.bash
@@ -22,49 +21,232 @@ VX=${1:-0.10}
 DURATION=${2:-8}
 RATE=20
 TIMES=$(echo "$DURATION * $RATE" | bc)
-STOP_TIMES=20   # 1 second of stop pulses at 20 Hz
+STOP_TIMES=20
 
 BAG_DIR=~/test_logs/test_$(date +%Y%m%d_%H%M%S)
+mkdir -p ~/test_logs
 
 echo "=== motor_test.sh ==="
 echo "  vx=${VX} m/s  duration=${DURATION}s  (${TIMES} publishes at ${RATE} Hz)"
 echo "  bag: ${BAG_DIR}"
 echo ""
 
-# 1. Start bag in background (bag is not a cmd_vel publisher — this is safe)
-ros2 bag record \
+# ── 1. Start bag ─────────────────────────────────────────────────────────────
+nohup ros2 bag record \
   /diff_cont/cmd_vel_unstamped \
   /diff_cont/odom \
   /imu/imu \
   /battery_state \
-  -o "${BAG_DIR}" &
+  --storage sqlite3 \
+  -o "${BAG_DIR}" > /tmp/bag_record.log 2>&1 &
 BAG_PID=$!
+disown $BAG_PID
 echo "[1] Bag started (pid ${BAG_PID})"
-sleep 2   # let bag subscribe to all topics
+sleep 3
 
-# 2. Drive — FOREGROUND, blocks until --times completes
+# ── 2. Drive ─────────────────────────────────────────────────────────────────
 echo "[2] Driving at ${VX} m/s for ${DURATION}s..."
 ros2 topic pub --times "${TIMES}" --rate "${RATE}" \
   /diff_cont/cmd_vel_unstamped \
   geometry_msgs/msg/Twist \
   "{linear: {x: ${VX}}, angular: {z: 0.0}}"
-
 echo "[2] Drive complete."
 
-# 3. Stop — FOREGROUND repeated --once for 1 second
+# ── 3. Stop ──────────────────────────────────────────────────────────────────
 echo "[3] Sending explicit stop..."
 for i in $(seq 1 ${STOP_TIMES}); do
   ros2 topic pub --once \
     /diff_cont/cmd_vel_unstamped \
     geometry_msgs/msg/Twist \
-    "{linear: {x: 0.0}, angular: {z: 0.0}}"
+    "{linear: {x: 0.0}, angular: {z: 0.0}}" > /dev/null 2>&1
   sleep 0.05
 done
 echo "[3] Stop sent."
-
-# 4. Stop bag
-kill -SIGINT "${BAG_PID}" 2>/dev/null
-wait "${BAG_PID}" 2>/dev/null
-echo "[4] Bag saved to: ${BAG_DIR}"
 echo ""
-echo "=== CONFIRM ROBOT IS STATIONARY BEFORE PROCEEDING ==="
+echo "=== CONFIRM ROBOT IS STATIONARY ==="
+echo ""
+
+# ── 4. Stop bag and validate ──────────────────────────────────────────────────
+echo "[4] Stopping bag..."
+pkill -SIGINT -f "ros2 bag record" 2>/dev/null || true
+sleep 3
+
+BAG_DB=$(ls "${BAG_DIR}"/*.db3 2>/dev/null | head -1)
+
+# Gate 1: db3 file exists and has data
+if [ -z "$BAG_DB" ] || [ ! -s "$BAG_DB" ]; then
+  echo "ABORT: bag file missing or empty"
+  echo "  recorder log:"
+  cat /tmp/bag_record.log
+  exit 1
+fi
+echo "  [gate 1] db3 exists: $(ls -lh $BAG_DB | awk '{print $5}')"
+
+# Gate 2: metadata.yaml exists
+if [ ! -f "${BAG_DIR}/metadata.yaml" ]; then
+  echo "ABORT: metadata.yaml missing — bag was not closed cleanly"
+  exit 1
+fi
+echo "  [gate 2] metadata.yaml present"
+
+# Gate 3: ros2 bag info succeeds
+BAG_INFO=$(ros2 bag info "${BAG_DIR}" 2>&1)
+if ! echo "$BAG_INFO" | grep -q "Duration"; then
+  echo "ABORT: ros2 bag info failed:"
+  echo "$BAG_INFO"
+  exit 1
+fi
+echo "  [gate 3] ros2 bag info OK"
+echo "$BAG_INFO" | grep -E "Duration|Messages|Topic"
+echo ""
+
+# ── 5. Sanity gates + analysis ────────────────────────────────────────────────
+python3 - "${BAG_DB}" "${VX}" "${DURATION}" <<'PYEOF'
+import sys, sqlite3, statistics
+
+bag_db   = sys.argv[1]
+cmd_vx_t = float(sys.argv[2])
+duration = float(sys.argv[3])
+
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
+
+Odometry     = get_message('nav_msgs/msg/Odometry')
+Imu          = get_message('sensor_msgs/msg/Imu')
+BatteryState = get_message('sensor_msgs/msg/BatteryState')
+Twist        = get_message('geometry_msgs/msg/Twist')
+
+conn = sqlite3.connect(bag_db)
+topics = {row[1]: row[0] for row in conn.execute("SELECT id, name FROM topics")}
+
+def tid(name): return topics.get(name)
+
+odom_vx, pos_x, ts_odom = [], [], []
+imu_wz, imu_ax, ts_imu  = [], [], []
+bat_v, bat_i             = [], []
+cmd_vx, ts_cmd           = [], []
+
+for topic_id, timestamp, data in conn.execute(
+        "SELECT topic_id, timestamp, data FROM messages ORDER BY timestamp"):
+    data = bytes(data)
+    if topic_id == tid('/diff_cont/odom'):
+        m = deserialize_message(data, Odometry)
+        odom_vx.append(m.twist.twist.linear.x)
+        pos_x.append(m.pose.pose.position.x)
+        ts_odom.append(timestamp)
+    elif topic_id == tid('/imu/imu'):
+        m = deserialize_message(data, Imu)
+        imu_wz.append(m.angular_velocity.z)
+        imu_ax.append(m.linear_acceleration.x)
+        ts_imu.append(timestamp)
+    elif topic_id == tid('/battery_state'):
+        m = deserialize_message(data, BatteryState)
+        bat_v.append(m.voltage)
+        bat_i.append(m.current)
+    elif topic_id == tid('/diff_cont/cmd_vel_unstamped'):
+        m = deserialize_message(data, Twist)
+        cmd_vx.append(m.linear.x)
+        ts_cmd.append(timestamp)
+
+sep = "─" * 54
+print(sep)
+print("  BAG SANITY GATES")
+print(sep)
+
+abort = False
+
+# Gate 4: cmd_vel count
+drive_cmds = [v for v in cmd_vx if v > 0.05]
+expected_drive = int(duration * 20)
+print(f"  [gate 4] cmd_vel: {len(cmd_vx)} total, {len(drive_cmds)} drive msgs (expected ~{expected_drive})")
+if len(drive_cmds) < expected_drive * 0.8:
+    print(f"  ABORT: drive cmd count too low — bag may have missed the run")
+    abort = True
+
+# Gate 5: duration sanity (odom)
+if ts_odom:
+    actual_dur = (ts_odom[-1] - ts_odom[0]) / 1e9
+    print(f"  [gate 5] odom span: {actual_dur:.1f}s (expected ≥{duration:.0f}s)")
+    if actual_dur < duration * 0.8:
+        print(f"  ABORT: recorded duration too short")
+        abort = True
+
+# Gate 6: timestamps monotonic (odom)
+if ts_odom:
+    jumps = sum(1 for a, b in zip(ts_odom, ts_odom[1:]) if b <= a)
+    print(f"  [gate 6] odom timestamp monotonic: {jumps} violations")
+    if jumps > 0:
+        print(f"  ABORT: non-monotonic timestamps — bag is corrupted")
+        abort = True
+
+# Gate 7: odom message count
+expected_odom = int(duration * 30)
+print(f"  [gate 7] odom msgs: {len(odom_vx)} (expected ~{expected_odom})")
+if len(odom_vx) < expected_odom * 0.5:
+    print(f"  ABORT: too few odom samples")
+    abort = True
+
+if abort:
+    print(f"\n  One or more gates failed — do not tune from this data.")
+    sys.exit(1)
+
+print(f"  All sanity gates passed.\n")
+
+# ── Analysis ──────────────────────────────────────────────────────────────────
+ODOM_RATE = 30
+skip = int(2 * ODOM_RATE)   # skip first 2 s ramp-up
+n_drive = int(duration * ODOM_RATE)
+ss = odom_vx[skip : skip + n_drive] if len(odom_vx) > skip else odom_vx[skip:]
+
+print(sep)
+print("  RESULTS — KI=0.5  target=%.2f m/s  duration=%.0fs" % (cmd_vx_t, duration))
+print(sep)
+
+# 1. Velocity tracking
+if ss:
+    m   = statistics.mean(ss)
+    std = statistics.stdev(ss) if len(ss) > 1 else 0.0
+    err = (m - cmd_vx_t) / cmd_vx_t * 100
+    neg = sum(1 for v in ss if v < 0)
+    print(f"\n  [1] Velocity tracking (steady-state, n={len(ss)})")
+    print(f"      mean={m:.4f} m/s  std={std:.4f}  error={err:+.1f}%")
+    print(f"      negative samples: {neg}")
+    print(f"      P-only baseline:  mean=0.0952  error=-4.8%")
+    print(f"      {'PASS' if abs(err) < 10 and neg == 0 else 'FAIL'}")
+
+# 2. Yaw drift
+if imu_wz:
+    mwz  = statistics.mean(imu_wz)
+    pkwz = max(imu_wz, key=abs)
+    print(f"\n  [2] Yaw drift")
+    print(f"      angular_velocity.z  mean={mwz:+.4f}  peak={pkwz:+.4f} rad/s")
+    print(f"      {'PASS' if abs(mwz) < 0.05 else 'FAIL'}  (threshold ±0.05 rad/s mean)")
+
+# 3. Jerk / oscillation
+if imu_ax:
+    pp = max(imu_ax) - min(imu_ax)
+    print(f"\n  [3] Jerk / oscillation")
+    print(f"      linear_acceleration.x  peak-to-peak={pp:.3f} m/s²")
+    print(f"      {'PASS' if pp < 1.0 else 'WARN'}  (threshold 1.0 m/s²)")
+
+# 4. Current draw
+if bat_i:
+    mi  = statistics.mean(bat_i)
+    pki = max(bat_i)
+    mv  = statistics.mean(bat_v)
+    print(f"\n  [4] Battery under load")
+    print(f"      voltage={mv:.2f} V  current mean={mi:.3f} A  peak={pki:.3f} A")
+    print(f"      {'PASS' if pki < 2*mi else 'WARN'}  (peak < 2× mean)")
+
+# 5. Distance accuracy
+if pos_x:
+    expected = cmd_vx_t * duration
+    actual   = pos_x[-1]
+    derr     = (actual - expected) / expected * 100
+    print(f"\n  [5] Distance accuracy")
+    print(f"      expected={expected:.3f} m  actual={actual:.3f} m  error={derr:+.1f}%")
+    print(f"      P-only baseline: ~-6.2%")
+    print(f"      {'PASS' if abs(derr) < 10 else 'FAIL'}  (threshold ±10%)")
+
+print(f"\n{sep}")
+PYEOF
