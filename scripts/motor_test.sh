@@ -186,14 +186,47 @@ if abort:
 
 print(f"  All sanity gates passed.\n")
 
-# ── Analysis ──────────────────────────────────────────────────────────────────
-ODOM_RATE = 30
-skip = int(2 * ODOM_RATE)   # skip first 2 s ramp-up
-n_drive = int(duration * ODOM_RATE)
-ss = odom_vx[skip : skip + n_drive] if len(odom_vx) > skip else odom_vx[skip:]
+# ── Analysis — cmd_vel-gated window ──────────────────────────────────────────
+# Gate the analysis on actual drive timestamps, not hardcoded rate assumptions.
+# drive_start = first cmd_vel with linear.x > 0
+# drive_end   = last  cmd_vel with linear.x > 0
+# Odom window = [drive_start + 2s ramp, drive_end]
+# Distance    = delta pose over the same window (not pos_x[-1])
+
+NS = 1e9  # nanoseconds per second
+RAMP_S = 2.0  # skip first 2 s of drive for ramp-up
+
+drive_ts = [ts for ts, v in zip(ts_cmd, cmd_vx) if v > 0.05]
+if not drive_ts:
+    print("  ABORT: no drive cmd_vel timestamps found")
+    sys.exit(1)
+
+t_drive_start = drive_ts[0] / NS
+t_drive_end   = drive_ts[-1] / NS
+t_ss_start    = t_drive_start + RAMP_S
+
+# Odom samples inside steady-state window
+ss_pairs = [(v, px, ts / NS) for v, px, ts in zip(odom_vx, pos_x, ts_odom)
+            if t_ss_start <= ts / NS <= t_drive_end]
+ss      = [v  for v, px, t in ss_pairs]
+ss_pos  = [px for v, px, t in ss_pairs]
+
+# IMU samples inside full drive window (including ramp — for jerk/yaw)
+drive_imu_wz = [v for v, ts in zip(imu_wz, ts_imu)
+                if t_drive_start <= ts / NS <= t_drive_end]
+drive_imu_ax = [v for v, ts in zip(imu_ax, ts_imu)
+                if t_drive_start <= ts / NS <= t_drive_end]
+
+# Battery samples during drive
+drive_bat_i = [v for v in bat_i]   # 1 Hz — use all; too few to gate precisely
+drive_bat_v = [v for v in bat_v]
+
+actual_drive_s = t_drive_end - t_drive_start
+ss_span_s      = t_drive_end - t_ss_start
 
 print(sep)
-print("  RESULTS — KI=0.5  target=%.2f m/s  duration=%.0fs" % (cmd_vx_t, duration))
+print("  RESULTS — P-only  KP=%.2f  target=%.2f m/s  duration=%.0fs" % (0.25, cmd_vx_t, duration))
+print(f"  drive window: {actual_drive_s:.2f}s  |  steady-state window: {ss_span_s:.2f}s  |  n={len(ss)} odom samples")
 print(sep)
 
 # 1. Velocity tracking
@@ -202,43 +235,45 @@ if ss:
     std = statistics.stdev(ss) if len(ss) > 1 else 0.0
     err = (m - cmd_vx_t) / cmd_vx_t * 100
     neg = sum(1 for v in ss if v < 0)
-    print(f"\n  [1] Velocity tracking (steady-state, n={len(ss)})")
+    print(f"\n  [1] Velocity tracking (steady-state: drive+2s → drive_end)")
     print(f"      mean={m:.4f} m/s  std={std:.4f}  error={err:+.1f}%")
     print(f"      negative samples: {neg}")
     print(f"      P-only baseline:  mean=0.0952  error=-4.8%")
     print(f"      {'PASS' if abs(err) < 10 and neg == 0 else 'FAIL'}")
+else:
+    print(f"\n  [1] Velocity tracking: NO SAMPLES in steady-state window")
 
 # 2. Yaw drift
-if imu_wz:
-    mwz  = statistics.mean(imu_wz)
-    pkwz = max(imu_wz, key=abs)
-    print(f"\n  [2] Yaw drift")
+if drive_imu_wz:
+    mwz  = statistics.mean(drive_imu_wz)
+    pkwz = max(drive_imu_wz, key=abs)
+    print(f"\n  [2] Yaw drift (full drive window, n={len(drive_imu_wz)})")
     print(f"      angular_velocity.z  mean={mwz:+.4f}  peak={pkwz:+.4f} rad/s")
     print(f"      {'PASS' if abs(mwz) < 0.05 else 'FAIL'}  (threshold ±0.05 rad/s mean)")
 
 # 3. Jerk / oscillation
-if imu_ax:
-    pp = max(imu_ax) - min(imu_ax)
-    print(f"\n  [3] Jerk / oscillation")
+if drive_imu_ax:
+    pp = max(drive_imu_ax) - min(drive_imu_ax)
+    print(f"\n  [3] Jerk / oscillation (full drive window)")
     print(f"      linear_acceleration.x  peak-to-peak={pp:.3f} m/s²")
     print(f"      {'PASS' if pp < 1.0 else 'WARN'}  (threshold 1.0 m/s²)")
 
 # 4. Current draw
-if bat_i:
-    mi  = statistics.mean(bat_i)
-    pki = max(bat_i)
-    mv  = statistics.mean(bat_v)
+if drive_bat_i:
+    mi  = statistics.mean(drive_bat_i)
+    pki = max(drive_bat_i)
+    mv  = statistics.mean(drive_bat_v)
     print(f"\n  [4] Battery under load")
     print(f"      voltage={mv:.2f} V  current mean={mi:.3f} A  peak={pki:.3f} A")
     print(f"      {'PASS' if pki < 2*mi else 'WARN'}  (peak < 2× mean)")
 
-# 5. Distance accuracy
-if pos_x:
-    expected = cmd_vx_t * duration
-    actual   = pos_x[-1]
-    derr     = (actual - expected) / expected * 100
-    print(f"\n  [5] Distance accuracy")
-    print(f"      expected={expected:.3f} m  actual={actual:.3f} m  error={derr:+.1f}%")
+# 5. Distance accuracy — delta pose over steady-state window
+if len(ss_pos) >= 2:
+    delta_x  = ss_pos[-1] - ss_pos[0]
+    expected = cmd_vx_t * ss_span_s
+    derr     = (delta_x - expected) / expected * 100 if expected else 0
+    print(f"\n  [5] Distance accuracy (delta pose over steady-state window)")
+    print(f"      window={ss_span_s:.2f}s  expected={expected:.3f} m  actual Δx={delta_x:.3f} m  error={derr:+.1f}%")
     print(f"      P-only baseline: ~-6.2%")
     print(f"      {'PASS' if abs(derr) < 10 else 'FAIL'}  (threshold ±10%)")
 
