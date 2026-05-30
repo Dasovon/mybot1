@@ -15,7 +15,6 @@ void microros_publish_odom(float x, float y, float theta,
                            float vel_linear, float vel_angular);
 void microros_publish_imu(float ax, float ay, float az,
                           float gx, float gy, float gz);
-void microros_publish_battery(float voltage_v, float current_ma);
 
 // Latest cmd_vel received from Nav2 / teleop. Returns 0 if no command yet.
 float    microros_cmd_linear();

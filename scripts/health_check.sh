@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mybot1 boot health check — runs after microros-agent and mybot-display.
+# mybot1 boot health check — runs after all robot services have started.
 # Auto-fixes read-only filesystem and stopped services, then verifies
 # ROS topics are live. Results go to journalctl (systemd) or stdout.
 
@@ -11,6 +11,22 @@ FAIL=0
 log_pass() { echo "[PASS] $1"; (( PASS++ )) || true; }
 log_fail() { echo "[FAIL] $1"; (( FAIL++ )) || true; }
 log_fix()  { echo "[FIX ] $1"; }
+
+ensure_service() {
+    local svc="$1"
+    if systemctl is-active --quiet "$svc"; then
+        log_pass "$svc is active"
+    else
+        log_fix "$svc not active — starting"
+        sudo systemctl start "$svc"
+        sleep 3
+        if systemctl is-active --quiet "$svc"; then
+            log_pass "$svc started successfully"
+        else
+            log_fail "$svc failed to start"
+        fi
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # 1. Filesystem must be read-write (lgpio, ROS logs, pip installs all need it)
@@ -29,54 +45,55 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. microros-agent must be running
+# 2. Required services must be running
 # ---------------------------------------------------------------------------
-if systemctl is-active --quiet microros-agent.service; then
-    log_pass "microros-agent.service is active"
-else
-    log_fix "microros-agent.service not active — starting"
-    sudo systemctl start microros-agent.service
-    sleep 3
-    if systemctl is-active --quiet microros-agent.service; then
-        log_pass "microros-agent.service started successfully"
-    else
-        log_fail "microros-agent.service failed to start"
-    fi
-fi
+ensure_service microros-agent.service
 
-# ---------------------------------------------------------------------------
-# 3. mybot-display must be running (restart picks up writable /tmp for lgpio)
-# ---------------------------------------------------------------------------
+# Display: restart if it started on a read-only filesystem
 if systemctl is-active --quiet mybot-display.service; then
-    # Check logs for the lgpio read-only error since last start
     START_TIME=$(systemctl show mybot-display.service --property=ActiveEnterTimestamp \
         | cut -d= -f2)
     if journalctl -u mybot-display.service --since "$START_TIME" --no-pager -q \
             2>/dev/null | grep -q "Read-only file system"; then
-        log_fix "mybot-display started on read-only fs — restarting now that fs is rw"
+        log_fix "mybot-display started on read-only fs — restarting"
         sudo systemctl restart mybot-display.service
         sleep 3
     fi
 fi
+ensure_service mybot-display.service
+ensure_service mybot-battery.service
 
-if systemctl is-active --quiet mybot-display.service; then
-    log_pass "mybot-display.service is active"
-else
-    log_fix "mybot-display.service not active — starting"
-    sudo systemctl start mybot-display.service
-    sleep 3
-    if systemctl is-active --quiet mybot-display.service; then
-        log_pass "mybot-display.service started successfully"
+# ---------------------------------------------------------------------------
+# 3. INA219 sanity check — read voltage directly via smbus2
+# ---------------------------------------------------------------------------
+BAT_VOLTAGE=$(python3 - <<'EOF'
+try:
+    from ina219 import INA219
+    ina = INA219(0.1, busnum=1)
+    ina.configure()
+    print(f"{ina.voltage():.2f}")
+except Exception as e:
+    print(f"ERROR: {e}")
+EOF
+)
+
+if echo "$BAT_VOLTAGE" | grep -qE '^[0-9]+\.[0-9]+$'; then
+    # Sanity check: must be between 8 V and 16 V (covers flat to full 3S + margin)
+    if awk "BEGIN { exit !($BAT_VOLTAGE >= 8.0 && $BAT_VOLTAGE <= 16.0) }"; then
+        log_pass "INA219 battery voltage: ${BAT_VOLTAGE} V"
     else
-        log_fail "mybot-display.service failed to start"
+        log_fail "INA219 battery voltage out of range: ${BAT_VOLTAGE} V (expected 8–16 V)"
     fi
+else
+    log_fail "INA219 read failed: $BAT_VOLTAGE"
 fi
 
 # ---------------------------------------------------------------------------
-# 4. ROS topic health — ESP32 must be publishing within 15 s of agent start
+# 4. ROS topic health — ESP32 must be publishing via micro-ROS
 # ---------------------------------------------------------------------------
 source /opt/ros/jazzy/setup.bash
 source /home/ubuntu/microros_ws/install/setup.bash
+source /home/ubuntu/bot_ws/install/setup.bash
 
 check_topic_hz() {
     local topic="$1"
@@ -93,7 +110,6 @@ check_topic_hz() {
         return
     fi
 
-    # Compare using awk (bash can't do float comparison)
     if awk "BEGIN { exit !($rate >= $min_hz) }"; then
         log_pass "$label: ${rate} Hz (>= ${min_hz} Hz required)"
     else
@@ -101,16 +117,20 @@ check_topic_hz() {
     fi
 }
 
-check_topic_hz /diff_cont/odom  25.0 "odom"
-check_topic_hz /imu/imu         25.0 "IMU"
+check_topic_hz /diff_cont/odom 25.0 "odom"
+check_topic_hz /imu/imu        25.0 "IMU"
 
-# Battery only publishes at 1 Hz — just check it shows up
-BATT=$(timeout 5 ros2 topic echo /battery_state --once 2>/dev/null)
-if echo "$BATT" | grep -q 'voltage'; then
+# /battery_state: published by Pi battery node at 1 Hz
+BATT=$(timeout 5 ros2 topic echo /battery_state --once --qos-reliability reliable 2>/dev/null || true)
+if echo "$BATT" | grep -q 'voltage:'; then
     VOLTAGE=$(echo "$BATT" | grep '^voltage:' | awk '{print $2}')
-    log_pass "battery_state: ${VOLTAGE} V"
+    if awk "BEGIN { exit !($VOLTAGE >= 8.0 && $VOLTAGE <= 16.0) }"; then
+        log_pass "/battery_state: ${VOLTAGE} V"
+    else
+        log_fail "/battery_state: voltage out of range: ${VOLTAGE} V"
+    fi
 else
-    log_fail "battery_state: no message received"
+    log_fail "/battery_state: no message received from Pi battery publisher"
 fi
 
 # ---------------------------------------------------------------------------

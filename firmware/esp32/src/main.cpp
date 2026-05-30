@@ -3,7 +3,6 @@
 #include "encoders.h"
 #include "pid.h"
 #include "imu.h"
-#include "battery.h"
 #include "microros.h"
 
 // ---------------------------------------------------------------------------
@@ -45,29 +44,19 @@ static long prev_ticks_l = 0;
 // ---------------------------------------------------------------------------
 static uint32_t last_control_ms  = 0;  // 100 Hz
 static uint32_t last_pub_ms      = 0;  // 30 Hz  (odom + IMU)
-static uint32_t last_bat_pub_ms  = 0;  // 1 Hz   (battery micro-ROS)
 
 // ---------------------------------------------------------------------------
 // setup
 // ---------------------------------------------------------------------------
 void setup() {
-    // I2C mutex — must be created before battery_task is started
-    g_i2c_mutex = xSemaphoreCreateMutex();
-
     motors_init();
     encoders_init();
-
-    if (!imu_init()) { }
-    if (!battery_init()) { }
-
-    xTaskCreatePinnedToCore(battery_task_fn, "battery", 4096, nullptr, 2, nullptr, 0);
-
+    imu_init();
     microros_init();
 
     uint32_t now = millis();
     last_control_ms = now;
     last_pub_ms     = now;
-    last_bat_pub_ms = now;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,24 +144,10 @@ void loop() {
 
         microros_publish_odom(odom_x, odom_y, odom_theta, vel_linear, vel_angular);
 
-        // IMU read — take I2C mutex to coordinate with battery_task on Core 0
-        if (g_i2c_mutex && xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(10))) {
-            float ax, ay, az, gx, gy, gz;
-            if (imu_read(&ax, &ay, &az, &gx, &gy, &gz)) {
-                xSemaphoreGive(g_i2c_mutex);
-                microros_publish_imu(ax, ay, az, gx, gy, gz);
-            } else {
-                xSemaphoreGive(g_i2c_mutex);
-            }
+        float ax, ay, az, gx, gy, gz;
+        if (imu_read(&ax, &ay, &az, &gx, &gy, &gz)) {
+            microros_publish_imu(ax, ay, az, gx, gy, gz);
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // 1 Hz — battery publish via micro-ROS
-    // -----------------------------------------------------------------------
-    if (now - last_bat_pub_ms >= 1000) {
-        last_bat_pub_ms = now;
-        microros_publish_battery(g_battery.voltage_v, g_battery.current_ma);
     }
 
     // -----------------------------------------------------------------------

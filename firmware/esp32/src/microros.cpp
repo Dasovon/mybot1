@@ -45,7 +45,6 @@ extern "C" size_t arduino_transport_read(struct uxrCustomTransport* transport,
 
 #include <nav_msgs/msg/odometry.h>
 #include <sensor_msgs/msg/imu.h>
-#include <sensor_msgs/msg/battery_state.h>
 #include <geometry_msgs/msg/twist.h>
 
 // ---------------------------------------------------------------------------
@@ -65,13 +64,11 @@ static rclc_executor_t  executor;
 
 static rcl_publisher_t    pub_odom;
 static rcl_publisher_t    pub_imu;
-static rcl_publisher_t    pub_battery;
 static rcl_subscription_t sub_cmd_vel;
 
-static nav_msgs__msg__Odometry      odom_msg;
-static sensor_msgs__msg__Imu        imu_msg;
-static sensor_msgs__msg__BatteryState bat_msg;
-static geometry_msgs__msg__Twist    cmd_vel_msg;
+static nav_msgs__msg__Odometry   odom_msg;
+static sensor_msgs__msg__Imu     imu_msg;
+static geometry_msgs__msg__Twist cmd_vel_msg;
 
 // Frame ID string buffers — set once in create_entities(), reused every publish.
 static char frame_odom[]      = "odom";
@@ -108,12 +105,6 @@ static bool create_entities() {
             &pub_imu, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
             "imu/imu") != RCL_RET_OK) return false;
-
-    // Battery — RELIABLE (1 Hz, must not silently drop)
-    if (rclc_publisher_init_default(
-            &pub_battery, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, BatteryState),
-            "battery_state") != RCL_RET_OK) return false;
 
     // cmd_vel subscriber — RELIABLE
     if (rclc_subscription_init_default(
@@ -153,9 +144,8 @@ static bool create_entities() {
 
 static void destroy_entities() {
     rclc_executor_fini(&executor);
-    rcl_publisher_fini(&pub_odom,    &node);
-    rcl_publisher_fini(&pub_imu,     &node);
-    rcl_publisher_fini(&pub_battery, &node);
+    rcl_publisher_fini(&pub_odom, &node);
+    rcl_publisher_fini(&pub_imu,  &node);
     rcl_subscription_fini(&sub_cmd_vel, &node);
     rcl_node_fini(&node);
     rclc_support_fini(&support);
@@ -257,20 +247,6 @@ void microros_publish_imu(float ax, float ay, float az,
     imu_msg.angular_velocity.z    = gz;
 
     rcl_publish(&pub_imu, &imu_msg, nullptr);
-}
-
-void microros_publish_battery(float voltage_v, float current_ma) {
-    if (state != AGENT_CONNECTED) return;
-
-    uint32_t ms = millis();
-    bat_msg.header.stamp.sec     = ms / 1000;
-    bat_msg.header.stamp.nanosec = (ms % 1000) * 1000000UL;
-    bat_msg.voltage              = voltage_v;
-    bat_msg.current              = current_ma / 1000.0f;  // mA → A
-    bat_msg.present              = true;
-    bat_msg.power_supply_status  = sensor_msgs__msg__BatteryState__POWER_SUPPLY_STATUS_DISCHARGING;
-
-    rcl_publish(&pub_battery, &bat_msg, nullptr);
 }
 
 float    microros_cmd_linear()   { return g_cmd_linear; }
