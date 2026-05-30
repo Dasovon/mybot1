@@ -108,21 +108,42 @@ Every phase gate in `docs/architecture/build_plan.md` must have a corresponding 
 
 ---
 
-## Data capture rules — mandatory for all motor tests
+## Motor test safety — hard rules (updated 2026-05-30)
 
-**Every motor test must be recorded.** Before issuing any `cmd_vel` command, start a bag capture. Do not analyze from memory or from a single `echo --once` snapshot.
+**The robot has proven strong enough to damage itself. These rules are absolute.**
 
-### Standard capture command (run on Pi before every motor test)
+### The only two approved cmd_vel forms
 
 ```bash
-# Run this first — before the cmd_vel publisher
-ros2 bag record \
-  /diff_cont/cmd_vel_unstamped \
-  /diff_cont/odom \
-  /imu/imu \
-  /battery_state \
-  -o ~/test_logs/test_$(date +%Y%m%d_%H%M%S)
+# Drive (foreground — SSH blocks until complete):
+ros2 topic pub --times 160 --rate 20 /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.10}}"
+
+# Stop (single shot):
+ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"
 ```
+
+### Emergency stop
+```bash
+for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"; sleep 0.05; done
+```
+
+### Use the test script — no manual bag + publisher combos
+
+```bash
+# On Pi — handles bag, drive, stop, and cleanup atomically:
+~/motor_test.sh [vx_m_s] [duration_s]
+~/motor_test.sh 0.10 8
+```
+
+**Never use `run_in_background: true` on a cmd_vel publisher.** A background publisher keeps running after a queued stop finishes. Robot hit a wall 2026-05-30 from this pattern.
+
+---
+
+## Data capture rules — mandatory for all motor tests
+
+**Every motor test must be recorded.** Use `motor_test.sh` — it starts the bag before the drive and stops it after. Do not analyze from memory or from a single `echo --once` snapshot.
+
+### Topics recorded by motor_test.sh
 
 `/diff_cont/cmd_vel_unstamped` is included so commanded vs. measured velocity can be compared in the same bag.
 

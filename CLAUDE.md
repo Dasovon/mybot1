@@ -508,17 +508,30 @@ The full step-by-step build plan — with files to create, implementation detail
 
 ### Motor Test Safety Rules
 
-These rules apply every time motors are commanded to move during testing. Violating them is a safety hazard.
+These rules apply every time motors are commanded to move during testing. **The robot has proven strong enough to damage itself and injure people — there is no grace period on these rules.**
 
-- **Never use `timeout N cmd_vel_pub` as the only stop mechanism.** The `timeout` command kills the publisher but leaves the SSH session; if the SSH session drops or the tool is interrupted the publisher keeps running. Use `--times N` on `ros2 topic pub` to limit publish count, or chain an explicit kill.
-- **Always send an explicit zero Twist after every test**, as a separate SSH command — do not rely on the test script exiting cleanly or the watchdog to stop the robot.
-  ```bash
-  ros2 topic pub --times 5 /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
-    "{linear: {x: 0.0}, angular: {z: 0.0}}"
-  ```
-- **30-second hard limit on any motor-on period.** This is a ceiling, not a target. For velocity tests, 5 seconds is enough to reach steady-state and measure — at 0.10 m/s that is 0.5 m of travel. Never run a velocity test longer than needed to collect a steady-state sample.
-- **Confirm stop succeeded before doing anything else.** After sending zero Twist, verify the robot is stationary before moving to data analysis or the next step.
-- **Never launch a cmd_vel publisher with `run_in_background: true`** without also immediately scheduling an explicit stop command that will run regardless of what happens next.
+#### Approved cmd_vel commands (the only two forms allowed)
+
+```bash
+# Drive — foreground, blocks until complete:
+ros2 topic pub --times 160 --rate 20 /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.10}}"
+
+# Stop — foreground, single shot:
+ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"
+```
+
+#### Emergency stop (paste into any terminal)
+```bash
+for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"; sleep 0.05; done
+```
+
+#### Hard rules
+
+- **NEVER background a cmd_vel publisher.** `run_in_background: true` on a cmd_vel publisher is forbidden. A queued stop runs and finishes while the background publisher is still live — the robot keeps going. Robot hit a wall 2026-05-30 from this exact mistake.
+- **All motor tests must use `scripts/motor_test.sh`** — the script handles bag start, foreground drive, foreground stop loop, and bag cleanup atomically. No manual background publishers.
+- **Never use `timeout N cmd_vel_pub` as the only stop mechanism.** Use `--times N --rate 20` instead.
+- **30-second hard ceiling on any motor-on period.** For velocity tests, 8 seconds at 0.10 m/s = 0.8 m — that is enough. Never run longer than needed.
+- **Confirm stop succeeded before doing anything else.** Ask the user to confirm the robot is stationary before analysis or next step.
 
 ### Physical Action Rules
 
