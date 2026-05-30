@@ -1,10 +1,9 @@
 #pragma once
 
-// P-only baseline — matched to validated bare-bones serial test (Python Kp=20, FF=64).
-// Translation: KP = Kp_py * MOTOR_MAX_RAD_S / 255 = 20 * 3.0 / 255 ≈ 0.235 → 0.25
-// KI=0, KD=0: reintroduce only after P-only is stable under ROS.
+// P-only baseline (KP=0.25, KI=0) gave SS error −4.8% at 0.10 m/s (validated 2026-05-25).
+// KI=0.5 introduced 2026-05-30 to drive SS error toward ~0%. Do not change KD until KI stable.
 #define PID_KP_DEFAULT  0.25f
-#define PID_KI_DEFAULT  0.0f
+#define PID_KI_DEFAULT  0.5f
 #define PID_KD_DEFAULT  0.0f
 
 class PIDController {

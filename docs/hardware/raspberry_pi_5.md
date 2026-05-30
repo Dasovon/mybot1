@@ -194,6 +194,37 @@ mount | grep ' / '   # must show rw,relatime — not ro
 
 ---
 
+### Flashing ESP32 firmware — stop microros-agent.service first
+
+**Symptom:** esptool connects, starts writing, then drops mid-write with `StopIteration` / "The chip stopped responding". Fails consistently at the same percentage regardless of baud rate or stub/no-stub. BOOT button, replug, retries all fail the same way.
+
+**Root cause:** `microros-agent.service` grabs `/dev/ttyACM0` between esptool's 1200bps reset touch and the subsequent write connection. It can also interrupt an in-progress write. The service restarts automatically (independent of `robot-launch.service`), so stopping only `robot-launch.service` is not enough.
+
+**Fix — always do this before flashing:**
+```bash
+sudo systemctl stop microros-agent.service
+sudo systemctl mask microros-agent.service   # prevents restart during flash
+sudo fuser -k /dev/ttyACM0 2>/dev/null       # kill any stale agent process
+# verify:
+sudo fuser /dev/ttyACM0 2>&1 || echo 'port free'
+```
+
+**Flash:**
+```bash
+python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
+    --before default-reset --after hard-reset \
+    write-flash --flash-mode dio --flash-freq 80m --flash-size detect \
+    0x10000 ~/firmware.bin
+```
+
+**After flash — restore the service:**
+```bash
+sudo systemctl unmask microros-agent.service
+sudo systemctl start microros-agent.service
+```
+
+---
+
 ### udev rules — static device names
 ```bash
 # /etc/udev/rules.d/99-robot.rules
