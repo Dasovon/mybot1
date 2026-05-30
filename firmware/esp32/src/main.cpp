@@ -40,7 +40,7 @@ static long  prev_ticks_r = 0;
 static long  prev_ticks_l = 0;
 static float vel_r_filt   = 0.0f;  // EMA-filtered wheel velocity (rad/s)
 static float vel_l_filt   = 0.0f;
-static constexpr float VEL_ALPHA = 0.2f;  // EMI mitigation: GPIO 40/41 picks up TB6612FNG 20 kHz noise
+static constexpr float VEL_ALPHA = 1.0f;  // No EMA lag — PCNT setFilter(400) handles EMI. Reintroduce only if raw velocity is too noisy.
 
 // ---------------------------------------------------------------------------
 // Loop timing
@@ -105,9 +105,9 @@ void loop() {
             prev_ticks_r = ticks_r;
             prev_ticks_l = ticks_l;
 
-            // Measured wheel velocity (rad/s) — EMA-filtered to suppress EMI on GPIO 40/41
-            float raw_r = (float)delta_r / ENC_CPR_F * TWO_PI_F / dt;
-            float raw_l = (float)delta_l / ENC_CPR_F * TWO_PI_F / dt;
+            // Measured wheel velocity (rad/s). Right encoder negated — motor mounted mirrored.
+            float raw_r = -(float)delta_r / ENC_CPR_F * TWO_PI_F / dt;
+            float raw_l =  (float)delta_l / ENC_CPR_F * TWO_PI_F / dt;
             vel_r_filt  = VEL_ALPHA * raw_r + (1.0f - VEL_ALPHA) * vel_r_filt;
             vel_l_filt  = VEL_ALPHA * raw_l + (1.0f - VEL_ALPHA) * vel_l_filt;
 
@@ -130,8 +130,8 @@ void loop() {
             motors_set_duty(apply_drive(out_r, tgt_r), apply_drive(out_l, tgt_l));
 
             // Odometry integration (mid-point rule)
-            float d_r  = (float)delta_r / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
-            float d_l  = (float)delta_l / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
+            float d_r  = -(float)delta_r / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;  // right motor mounted mirrored
+            float d_l  =  (float)delta_l / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
             float d_c  = (d_r + d_l) / 2.0f;
             float d_th = (d_r - d_l) / WHEEL_SEP;
             odom_x     += d_c * cosf(odom_theta + d_th / 2.0f);

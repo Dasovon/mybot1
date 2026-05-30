@@ -17,7 +17,7 @@ This document is the authoritative step-by-step build plan for this robot. Claud
 | Phase | Status |
 |---|---|
 | 0 — Hardware & Environment | Complete |
-| 1 — ESP32 Firmware | **Complete** — all gate checks pass. IMU 30 Hz, encoders correct direction, motors forward, watchdog fires. PID gains need tuning before Phase 2 odom accuracy matters. See [`docs/testing/phase1_motor_validation_2026-05-25.md`](../testing/phase1_motor_validation_2026-05-25.md) |
+| 1 — ESP32 Firmware | **Complete** — all gate checks pass. IMU 30 Hz, encoders correct direction, motors forward, watchdog fires. P-only baseline validated under ROS (KP=0.25, KI=0, KD=0, VEL_ALPHA=1.0). KI introduction next. See [`docs/testing/phase1_motor_validation_2026-05-25.md`](../testing/phase1_motor_validation_2026-05-25.md) |
 | 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, no disconnected frames. base_footprint root added. JSP Jazzy 2.4.1 invocation fixed. Sensor offsets are placeholders — measure before Phase 3 EKF. See [`docs/testing/phase2_urdf_tf_validation_2026-05-27.md`](../testing/phase2_urdf_tf_validation_2026-05-27.md) |
 | 3 — Sensor Bridge & EKF | Not started |
 | 4 — SLAM | Not started |
@@ -1052,7 +1052,7 @@ Expose: `motors_set_velocity(float right_mps, float left_mps)` and `motors_stop(
 **Step 3 — Encoder ISR**
 Attach interrupts on GPIO 42 (right A) and GPIO 40 (left A) as CHANGE. Read B channels (GPIO 39, 41) inside ISR for direction. Constants from CLAUDE.md: `ENC_CPR = 1010`, `wheel_radius = 0.033 m`.
 
-Apply EMA filter on left encoder velocity (`VEL_ALPHA = 0.2`) to suppress GPIO 40/41 PWM noise.
+EMA filter (`VEL_ALPHA`) is **not needed** when using PCNT — the hardware glitch filter (`setFilter(400)`) suppresses GPIO 40/41 PWM noise. Set `VEL_ALPHA = 1.0` (identity). Reintroduce EMA only if raw velocity is too noisy on a different chassis.
 
 > **Recommended upgrade:** The ESP32-S3 PCNT (Pulse Counter) peripheral provides hardware quadrature decoding with a built-in glitch filter — no ISR, no EMA filter, no CPU overhead. Use the [ESP32Encoder](https://github.com/madhephaestus/ESP32Encoder) library (`madhephaestus/ESP32Encoder`). Replace the `attachInterrupt` + EMA approach with PCNT in Phase 1 firmware for cleaner, lower-jitter encoder counts. The EMA approach in the test sketch above is still valid for Phase 0 bench verification.
 
@@ -1110,6 +1110,34 @@ If `/battery_state` drops out or pauses while motors run, the battery task is sh
 Phase 1 is complete when all checks above pass, including the battery isolation check.
 
 **Session log (2026-05-24):** micro-ROS transport, baud rate, and QoS issues resolved. odom at 30 Hz and battery at 1 Hz confirmed on bare hardware. Sensors/motors not yet wired. See [`docs/testing/phase1_firmware_validation_2026-05-24.md`](../testing/phase1_firmware_validation_2026-05-24.md) for the full issue log and transport configuration details.
+
+**Session log (2026-05-30) — hardware validation + PID baseline:**
+
+Hardware and encoder validation conclusions:
+- **GPIO 40/41 EMI issue was a bad breadboard section** (corroded contacts / misseated jumpers in the encoder signal path), not an ESP32 failure. Confirmed by GPIO swap test: right encoder counted cleanly on 40/41 → ESP32 pins are fine.
+- **PCNT `setFilter(400)` is required** — rejects pulses <5 µs, handles motor PWM EMI in hardware. Do not remove it.
+- **Right encoder is physically mounted mirrored** — `delta_r` must be negated in both velocity computation and odometry integration.
+
+Bare-bones validation approach (firmware/esp32_test + scripts/motor_test.py):
+- Created a separate minimal serial firmware (no micro-ROS, no PID, no EMA) and a Python P-controller test to validate hardware independently of the ROS stack.
+- Result: both encoders clean, motor symmetry L=+2.78±0.19 / R=+2.74±0.18 rad/s at target 3.0 rad/s, simple P-loop stable. Hardware confirmed good; prior instability was in the ROS firmware controller.
+
+Stable P-only baseline (2026-05-30):
+- `KP = 0.25` (equivalent to Python Kp=20, translated: `20 × MOTOR_MAX_RAD_S / 255 ≈ 0.25`)
+- `KI = 0.0`, `KD = 0.0`
+- `FF = MOTOR_FEEDFORWARD` (static friction offset, unchanged)
+- `VEL_ALPHA = 1.0` (EMA disabled — PCNT filter handles EMI; EMA phase lag made KD counterproductive)
+- Validated under ROS @ 0.10 m/s: SS error −4.8%, std 0.008 m/s, odom angular.z = −0.005 rad/s (straight), current 0.278A steady. Loop stable, no oscillation.
+
+IMU observations:
+- **BNO055 gyro (angular_velocity.z) is contaminated by brushed motor vibration under load** — reads −0.8 rad/s mean while encoder odom reads −0.005 rad/s (robot is actually straight).
+- **Encoder odom is the trustworthy source for PID tuning.** IMU angular.z is not usable as a stability metric while motors run.
+- EKF remedy: increase `imu0_config` angular velocity Z covariance so the filter trusts wheel odometry over IMU yaw during motor operation.
+
+INA219 status:
+- Battery monitor currently reads 32.76V / NaN current — sensor misconfigured or not responding. Not blocking PID tuning but must be fixed before Phase 3 gate.
+
+**Next session:** Introduce KI from the validated P-only baseline. Start at KI=0.5, measure SS error and distance accuracy against the P-only baseline. Do not touch KD until KI is stable.
 
 ---
 
@@ -1224,7 +1252,12 @@ ros2 launch robot_bringup ekf.launch.xml
 ```
 
 **Step 5 — PID floor tuning**
-Before declaring Phase 3 complete, validate that wheel velocity tracks commands within ±10% at steady state on the floor. Use `ros2 bag record` to capture odom + IMU during a straight-line drive. Adjust `PID_KI` in `firmware/esp32/include/pid.h` if tracking is slow.
+Before declaring Phase 3 complete, validate that wheel velocity tracks commands within ±10% at steady state on the floor. Every test run must be bagged per the data capture rules in `.claude/rules/testing.md` — record `/diff_cont/cmd_vel_unstamped`, `/diff_cont/odom`, `/imu/imu`, and `/battery_state` simultaneously. Analyze all five metrics (velocity tracking, yaw drift, jerk, current draw, distance accuracy) before adjusting any gain. Adjust `PID_KI` in `firmware/esp32/include/pid.h` if tracking is slow.
+
+**Validated tuning sequence (2026-05-30):**
+1. P-only (KP=0.25, KI=0, KD=0) confirmed stable under ROS: SS error −4.8%, std 0.008 m/s, straight driving. This is the committed baseline.
+2. Next: add KI starting at 0.5. Measure SS error, distance accuracy, and velocity std vs P-only baseline. Do not introduce KD until KI is stable.
+3. IMU angular.z is not a reliable stability metric while brushed motors run (vibration coupling). Use encoder odom angular.z for straightness assessment.
 
 ### Validation gate — Phase 3
 

@@ -1,11 +1,10 @@
 #pragma once
 
-// KP=1.4: proportional response — provides fast initial drive.
-// KI=3.0: integrator trims steady-state error around MOTOR_FEEDFORWARD baseline;
-//   does not need to wake up the motors (feedforward handles that).
-// KD=0.0: derivative off — encoder noise makes it more harmful than useful.
-#define PID_KP_DEFAULT  1.4f
-#define PID_KI_DEFAULT  3.0f
+// P-only baseline — matched to validated bare-bones serial test (Python Kp=20, FF=64).
+// Translation: KP = Kp_py * MOTOR_MAX_RAD_S / 255 = 20 * 3.0 / 255 ≈ 0.235 → 0.25
+// KI=0, KD=0: reintroduce only after P-only is stable under ROS.
+#define PID_KP_DEFAULT  0.25f
+#define PID_KI_DEFAULT  0.0f
 #define PID_KD_DEFAULT  0.0f
 
 class PIDController {
