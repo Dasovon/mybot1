@@ -137,13 +137,26 @@ The ESP32-S3 uses **two independent serial connections** to the Pi, on two separ
 -DARDUINO_USB_MODE=1          ; uses built-in hardware USB-JTAG/Serial controller
 ```
 
-**Flash from Pi (no button press needed):**
+**Flash from Pi — stop microros-agent.service first (it grabs the port mid-write):**
 ```bash
+# 1. Stop and mask the agent so it cannot restart during flash
+sudo systemctl stop microros-agent.service
+sudo systemctl mask microros-agent.service
+sudo fuser -k /dev/ttyACM0 2>/dev/null        # kill any stale agent process
+sudo fuser /dev/ttyACM0 2>&1 || echo 'port free'   # verify clear
+
+# 2. Flash
 python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
     --before default-reset --after hard-reset \
     write-flash --flash-mode dio --flash-freq 80m --flash-size detect \
     0x10000 firmware.bin
+
+# 3. Restore
+sudo systemctl unmask microros-agent.service
+sudo systemctl start microros-agent.service
 ```
+
+**Why:** `microros-agent.service` is independent of `robot-launch.service` and auto-restarts. It grabs `/dev/ttyACM0` between esptool's 1200bps reset touch and the write connection, causing consistent mid-write `StopIteration` failures that look like USB hardware problems but are pure port contention. Stopping only `robot-launch.service` is not enough.
 
 **Run micro-ROS agent on Pi:**
 ```bash
@@ -448,7 +461,8 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - CH340 UART0 (GPIO 43/44, `/dev/ttyUSB0`) is reserved for display telemetry JSON (Phase 6) — do not use it for micro-ROS.
 - `pub_odom` and `pub_imu` must use `rclc_publisher_init_default` (RELIABLE), not BEST_EFFORT. `nav_msgs/Odometry` is ~712 bytes serialized — exceeds the 512-byte XRCE MTU and is silently dropped on BEST_EFFORT streams.
 - Never change serial device, encoder pins, motor polarity, or controller YAML all at once during debugging. Change one thing, observe, repeat.
-- If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart robot-launch.service`.
+- If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart microros-agent.service`.
+- **Before flashing firmware:** always `sudo systemctl stop microros-agent.service && sudo systemctl mask microros-agent.service` first. The service auto-restarts independently of `robot-launch.service` and grabs `/dev/ttyACM0` mid-write. Unmask and restart after flash completes.
 
 ### SLAM / Costmaps
 - LiDAR is mounted low — detects chair legs and shoes as walls. Mitigate with RealSense depth validation and layered costmaps.
