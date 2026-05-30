@@ -492,6 +492,50 @@ The full step-by-step build plan — with files to create, implementation detail
 - **One thing at a time.** When debugging, change one variable (param, pin, config) and observe before changing another.
 - **Commit at phase boundaries** using the commit prefix convention in `build_plan.md`.
 
+### Motor Test Safety Rules
+
+These rules apply every time motors are commanded to move during testing. Violating them is a safety hazard.
+
+- **Never use `timeout N cmd_vel_pub` as the only stop mechanism.** The `timeout` command kills the publisher but leaves the SSH session; if the SSH session drops or the tool is interrupted the publisher keeps running. Use `--times N` on `ros2 topic pub` to limit publish count, or chain an explicit kill.
+- **Always send an explicit zero Twist after every test**, as a separate SSH command — do not rely on the test script exiting cleanly or the watchdog to stop the robot.
+  ```bash
+  ros2 topic pub --times 5 /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist \
+    "{linear: {x: 0.0}, angular: {z: 0.0}}"
+  ```
+- **30-second hard limit on any motor-on period.** This is a ceiling, not a target. For velocity tests, 5 seconds is enough to reach steady-state and measure — at 0.10 m/s that is 0.5 m of travel. Never run a velocity test longer than needed to collect a steady-state sample.
+- **Confirm stop succeeded before doing anything else.** After sending zero Twist, verify the robot is stationary before moving to data analysis or the next step.
+- **Never launch a cmd_vel publisher with `run_in_background: true`** without also immediately scheduling an explicit stop command that will run regardless of what happens next.
+
+### Physical Action Rules
+
+When a test requires the user to do something physical (push the robot, press a button, place it at a mark, plug a cable):
+
+1. **State clearly what physical action is needed.**
+2. **Stop — do not queue or run any follow-up command.**
+3. **Wait for the user's explicit reply** ("done", "ready", "ok") before issuing any command that depends on that action having happened.
+
+This applies to: pushing/moving the robot, pressing BOOT or RESET, plugging/unplugging cables, placing the robot on the floor or at a start mark.
+
+### Test Reporting Rules
+
+After every test that involves the robot moving, a sensor reading, or a subsystem check, report all four of these:
+
+1. **Test ran:** what command was executed, duration, parameters
+2. **Results:** raw numbers (velocity, position delta, rate, etc.)
+3. **Expected behavior:** what should have happened
+4. **Measured behavior:** what actually happened, and how it compares to expected
+
+Format as a table or clearly labeled sections. Include specific numbers — not just "pass" or "looks good". Always compare measured to expected explicitly.
+
+### Before Changing Things
+
+When about to make a non-trivial firmware or config change, or when hitting an error with multiple possible causes:
+
+1. **Pause and explain:** what the problem is, what change is being considered, what the tradeoffs are.
+2. **Wait for the user to confirm direction** before proceeding.
+
+The user guides the process — do not make architectural decisions and present finished diffs.
+
 ### Development Order (summary)
 
 | Phase | Goal |

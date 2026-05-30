@@ -9,12 +9,17 @@ void encoders_init() {
     ESP32Encoder::useInternalWeakPullResistors = UP;
 
     // Half-quadrature: counts both edges of channel A, uses B for direction.
-    // Gives ~1010 counts/rev — matches the validated ENC_CPR constant.
     enc_left.attachHalfQuad(ENC_L_A, ENC_L_B);
+    Serial0.printf("[ENC] left  attachHalfQuad A=GPIO%d B=GPIO%d  count after attach=%lld\n",
+                   ENC_L_A, ENC_L_B, enc_left.getCount());
+
     enc_right.attachHalfQuad(ENC_R_A, ENC_R_B);
+    Serial0.printf("[ENC] right attachHalfQuad A=GPIO%d B=GPIO%d  count after attach=%lld\n",
+                   ENC_R_A, ENC_R_B, enc_right.getCount());
 
     enc_left.clearCount();
     enc_right.clearCount();
+    Serial0.printf("[ENC] cleared — L=%lld R=%lld\n", enc_left.getCount(), enc_right.getCount());
 }
 
 long encoders_get_left()  { return (long)enc_left.getCount(); }

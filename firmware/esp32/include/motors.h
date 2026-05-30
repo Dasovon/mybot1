@@ -14,14 +14,16 @@
 #define MOTOR_PWM_BITS  8       // 0–255 range
 #define MOTOR_MAX_DUTY  255
 
-// Minimum duty to overcome gearbox stiction (~25% empirically on test chassis).
-// Applied when a non-zero target is active and PID output is below this floor.
-static constexpr float MOTOR_MIN_DUTY = 0.25f;
+// Static friction feedforward: baseline duty applied the moment target is nonzero,
+// in the direction of motion. PID trims around this value. Keeps motors from stalling
+// at low speeds and eliminates the integrator wind-up time to overcome friction.
+// ~25% measured as the minimum duty to start motion on test chassis.
+static constexpr float MOTOR_FEEDFORWARD = 0.25f;
 
 // Measured no-load max on test chassis at 1 kHz PWM: ~0.218 m/s = 6.39 rad/s.
 // Lower than 190 RPM spec (19.9 rad/s) due to chassis gearbox friction.
 // Set slightly above measured max so PID can reach 100% duty at target.
-static constexpr float MOTOR_MAX_RAD_S = 6.5f;
+static constexpr float MOTOR_MAX_RAD_S = 3.0f;
 
 void motors_init();
 

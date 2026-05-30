@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 static constexpr float WHEEL_SEP   = 0.177f;   // m, center-to-center
 static constexpr float WHEEL_RAD   = 0.03414f; // m (measured: 68.27mm dia)
-static constexpr float ENC_CPR_F   = 1010.0f;  // counts per wheel revolution
+static constexpr float ENC_CPR_F   = 990.0f;   // counts per wheel revolution (11 PPR × 2 edges × 45:1 gear, half-quad PCNT)
 static constexpr float TWO_PI_F    = 2.0f * (float)M_PI;
 
 // ---------------------------------------------------------------------------
@@ -36,21 +36,26 @@ static float vel_angular= 0.0f;
 // ---------------------------------------------------------------------------
 // Encoder tracking
 // ---------------------------------------------------------------------------
-static long prev_ticks_r = 0;
-static long prev_ticks_l = 0;
+static long  prev_ticks_r = 0;
+static long  prev_ticks_l = 0;
+static float vel_r_filt   = 0.0f;  // EMA-filtered wheel velocity (rad/s)
+static float vel_l_filt   = 0.0f;
+static constexpr float VEL_ALPHA = 0.2f;  // EMI mitigation: GPIO 40/41 picks up TB6612FNG 20 kHz noise
 
 // ---------------------------------------------------------------------------
 // Loop timing
 // ---------------------------------------------------------------------------
 static uint32_t last_control_ms  = 0;  // 100 Hz
 static uint32_t last_pub_ms      = 0;  // 30 Hz  (odom + IMU)
+static uint32_t last_enc_log_ms  = 0;  // 2 Hz   (raw PCNT count debug)
 
 // ---------------------------------------------------------------------------
 // setup
 // ---------------------------------------------------------------------------
 void setup() {
-    motors_init();
+    Serial0.begin(115200);  // CH340 debug — must be first so encoders_init() can log
     encoders_init();
+    motors_init();
     imu_init();
     microros_init();
 
@@ -88,6 +93,8 @@ void loop() {
             motors_stop();
             pid_right.reset();
             pid_left.reset();
+            vel_r_filt  = 0.0f;
+            vel_l_filt  = 0.0f;
             vel_linear  = 0.0f;
             vel_angular = 0.0f;
         } else {
@@ -98,9 +105,11 @@ void loop() {
             prev_ticks_r = ticks_r;
             prev_ticks_l = ticks_l;
 
-            // Measured wheel velocity (rad/s)
-            float meas_r = (float)delta_r / ENC_CPR_F * TWO_PI_F / dt;
-            float meas_l = (float)delta_l / ENC_CPR_F * TWO_PI_F / dt;
+            // Measured wheel velocity (rad/s) — EMA-filtered to suppress EMI on GPIO 40/41
+            float raw_r = (float)delta_r / ENC_CPR_F * TWO_PI_F / dt;
+            float raw_l = (float)delta_l / ENC_CPR_F * TWO_PI_F / dt;
+            vel_r_filt  = VEL_ALPHA * raw_r + (1.0f - VEL_ALPHA) * vel_r_filt;
+            vel_l_filt  = VEL_ALPHA * raw_l + (1.0f - VEL_ALPHA) * vel_l_filt;
 
             // Target from latest cmd_vel
             float cmd_v = microros_cmd_linear();
@@ -108,20 +117,17 @@ void loop() {
             float tgt_r = (cmd_v + cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
             float tgt_l = (cmd_v - cmd_w * WHEEL_SEP / 2.0f) / WHEEL_RAD;
 
-            // PID output in rad/s, mapped to [-1, 1] duty for motors.
-            // Apply deadband floor: gearbox stiction requires MOTOR_MIN_DUTY to move.
-            float out_r = pid_right.compute(tgt_r, meas_r);
-            float out_l = pid_left.compute(tgt_l, meas_l);
-            auto apply_floor = [](float out, float tgt) -> float {
-                float duty = out / MOTOR_MAX_RAD_S;
-                if (fabsf(tgt) < 0.01f) return duty;  // coast when target is zero
-                // Floor only in the target direction — reverse floor caused hard
-                // oscillation when PID applied small corrections against motion.
-                if (tgt > 0.0f && duty > 0.0f && duty < MOTOR_MIN_DUTY)  return MOTOR_MIN_DUTY;
-                if (tgt < 0.0f && duty < 0.0f && duty > -MOTOR_MIN_DUTY) return -MOTOR_MIN_DUTY;
-                return duty;
+            // Feedforward + PID: apply a static friction offset the moment target is
+            // nonzero so the motor overcomes stiction immediately, then let PID trim
+            // the residual error. Duty is clamped to [-1, 1] inside motors_set_duty.
+            float out_r = pid_right.compute(tgt_r, vel_r_filt);
+            float out_l = pid_left.compute(tgt_l, vel_l_filt);
+            auto apply_drive = [](float out, float tgt) -> float {
+                if (fabsf(tgt) < 0.01f) return 0.0f;
+                float ff   = (tgt > 0.0f) ? MOTOR_FEEDFORWARD : -MOTOR_FEEDFORWARD;
+                return ff + out / MOTOR_MAX_RAD_S;
             };
-            motors_set_duty(apply_floor(out_r, tgt_r), apply_floor(out_l, tgt_l));
+            motors_set_duty(apply_drive(out_r, tgt_r), apply_drive(out_l, tgt_l));
 
             // Odometry integration (mid-point rule)
             float d_r  = (float)delta_r / ENC_CPR_F * TWO_PI_F * WHEEL_RAD;
@@ -131,8 +137,8 @@ void loop() {
             odom_x     += d_c * cosf(odom_theta + d_th / 2.0f);
             odom_y     += d_c * sinf(odom_theta + d_th / 2.0f);
             odom_theta += d_th;
-            vel_linear  = d_c / dt;
-            vel_angular = d_th / dt;
+            vel_linear  = (vel_r_filt + vel_l_filt) * 0.5f * WHEEL_RAD;
+            vel_angular = (vel_r_filt - vel_l_filt) * WHEEL_RAD / WHEEL_SEP;
         }
     }
 
@@ -148,6 +154,17 @@ void loop() {
         if (imu_read(&ax, &ay, &az, &gx, &gy, &gz)) {
             microros_publish_imu(ax, ay, az, gx, gy, gz);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // 2 Hz — raw PCNT count debug on Serial0 (/dev/ttyUSB0)
+    // -----------------------------------------------------------------------
+    if (now - last_enc_log_ms >= 500) {
+        last_enc_log_ms = now;
+        long raw_l = encoders_get_left();
+        long raw_r = encoders_get_right();
+        Serial0.printf("[ENC] L=%ld R=%ld  vel_l=%.3f vel_r=%.3f  odom_x=%.4f\n",
+                       raw_l, raw_r, vel_l_filt, vel_r_filt, odom_x);
     }
 
     // -----------------------------------------------------------------------
