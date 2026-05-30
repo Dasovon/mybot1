@@ -20,7 +20,7 @@ A distributed ROS 2 autonomous mobile robot (AMR) built on a proven hardware sta
 | Motor driver | Adafruit TB6612FNG |
 | Motors + encoders | JGA25-371 DC 12V, 45:1, 1010 CPR |
 | IMU | Adafruit BNO055 (I2C 0x28) |
-| Battery monitor | Adafruit INA219 (I2C 0x40) |
+| Battery monitor | Generic INA219 (Pi I2C-1, 0x40) |
 | Environmental | BME680 (I2C 0x76) — planned |
 | 2D LiDAR | Slamtec RPLidar A1 M8 |
 | RGB-D camera | Intel RealSense D435 |
@@ -67,7 +67,7 @@ bot_ws/
 
 | GPIO | Function |
 |---|---|
-| 8 / 9 | I2C SDA / SCL (BNO055, INA219, BME680) |
+| 8 / 9 | I2C SDA / SCL (BNO055 0x28, BME680 0x76 planned) |
 | 10 | PWMA — Right motor speed |
 | 11 / 12 | AIN1 / AIN2 — Right motor direction |
 | 13 | PWMB — Left motor speed |
@@ -85,7 +85,7 @@ bot_ws/
 | `/diff_cont/cmd_vel_unstamped` | Dev PC → ESP32 | 20 Hz |
 | `/diff_cont/odom` | ESP32 → Pi | 30 Hz |
 | `/imu/imu` | ESP32 → Pi | 30 Hz |
-| `/battery_state` | ESP32 → Pi | 1 Hz |
+| `/battery_state` | Pi battery_publisher (INA219) | 1 Hz |
 | `/odom` | EKF fused output | 20 Hz |
 | `/scan` | RPLidar → SLAM | ~5.5 Hz |
 | `/camera/camera/depth/color/points` | RealSense → Nav2 | ~6 Hz |
