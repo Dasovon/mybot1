@@ -428,7 +428,8 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 ### Safety
 - ESP32 safety watchdog must run continuously, independent of ROS, Wi-Fi, and the dev PC.
 - If no velocity command is received within the timeout window, ESP32 stops the motors immediately.
-- Battery monitoring runs on the Pi (`battery_publisher` node, INA219 on I2C-1). Low-voltage motor cutoff is a **TODO** — implement as a Pi-side watchdog node that publishes `cmd_vel` zeros and calls `motors_stop` via a service when voltage drops below `BAT_CUTOFF_V` (9.9V).
+- Battery monitoring and low-voltage cutoff run on the Pi (`battery_publisher` node, `esp32_serial_bridge` package). When voltage drops below 9.9V the node publishes zero Twist to `/diff_cont/cmd_vel_unstamped` at 40 Hz and initiates OS shutdown after 30s. Hysteresis: exits cutoff above 10.2V.
+- **Cutoff limitation (Option 1):** The 40 Hz zero publish races Nav2/teleop — it wins in practice but has no true priority. **TODO (Phase 5):** add `twist_mux` with cutoff topic at highest priority so the cutoff gate is guaranteed, not a race.
 - **Dev PC failure must never cause a dangerous robot.**
 
 ### Electrical
