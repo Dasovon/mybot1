@@ -537,7 +537,19 @@ for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry
 
 ### Physical Action Rules
 
-When a test requires the user to do something physical (push the robot, press a button, place it at a mark, plug a cable):
+**HARD RULE: Before any command that will move the robot, stop in the conversation and ask the user if the robot is in position and they are ready. Wait for their reply. Do not run the command until they confirm.**
+
+The `motor_test.sh` script has a pre-test checklist prompt, but Claude pipes through it automatically (`printf '\n\n'`). The user never sees it. Claude must ask in the conversation before every motor test — the script prompt does not substitute for this.
+
+**Required sequence before any motor test:**
+1. Run pre-condition checks (zombie bags, agent count) — automated
+2. **Ask in the conversation:** state how much clear space is needed and ask if the robot is in position
+3. Wait for explicit reply ("ready", "go", "yes")
+4. Only then run the test
+
+**"Run it" from the user is a one-time confirmation for that specific test.** It does not carry over to the next test in the session.
+
+When a test requires any other physical action (press a button, plug a cable, place at a mark):
 
 1. **State clearly what physical action is needed.**
 2. **Stop — do not queue or run any follow-up command.**
