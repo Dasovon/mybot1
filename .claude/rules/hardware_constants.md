@@ -6,7 +6,7 @@
 
 | GPIO | Function |
 |---|---|
-| 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
+| 8 | I2C SDA — BNO055 (0x28), BME680 (0x76 planned) |
 | 9 | I2C SCL |
 | 10 | PWMA — Right side speed (LEDC ch 0, 1 kHz, 8-bit) → TB6612FNG PWMA |
 | 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
@@ -33,8 +33,13 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | Device | Address |
 |---|---|
 | BNO055 IMU | 0x28 |
-| INA219 battery monitor | 0x40 |
 | BME680 env sensor | 0x76 (not yet wired) |
+
+## I2C Addresses (Pi I2C-1 bus, GPIO 2/3)
+
+| Device | Address |
+|---|---|
+| INA219 battery monitor | 0x40 |
 
 ## Encoder constants (validated on floor)
 

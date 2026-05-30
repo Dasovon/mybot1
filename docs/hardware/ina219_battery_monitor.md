@@ -1,103 +1,27 @@
 # INA219 — Battery Monitor
 
-## Role in This Project
+> **Architecture change:** The INA219 is wired to the **Raspberry Pi**, not the ESP32.
+> See [`ina219_pi_battery_monitor.md`](ina219_pi_battery_monitor.md) for the current wiring, software, and ROS integration.
 
-The INA219 continuously measures battery voltage, current draw, and power consumption. This data is critical for:
-- Battery safety cutoff (stop motors below voltage threshold)
-- Low-battery warnings published to ROS
-- Power budget monitoring during development
+## Why it moved
 
-The battery monitor operates **independently of ROS, Wi-Fi, and the development PC**. The ESP32 must always know battery state.
+Battery monitoring was originally planned for the ESP32 I2C bus (GPIO 8/9). That approach was abandoned because:
 
----
+- The ESP32's job is motor control, encoders, IMU, and micro-ROS transport. Battery monitoring is a higher-level concern.
+- Putting the INA219 on the Pi allows `/battery_state` to be published by a proper ROS 2 node with full lifecycle management, without adding complexity to the firmware.
+- The Pi INA219 is available from boot, independent of the micro-ROS session state, so the display and health check always have battery data.
 
-## Key Specs
+## Current architecture
 
-| Property | Value |
+| Unit | Host | Bus | Address | Publisher | Topic |
+|---|---|---|---|---|---|
+| INA219 | Raspberry Pi | I2C-1 (GPIO 2/3) | 0x40 | `battery_publisher` node (`esp32_serial_bridge`) | `/battery_state` at 1 Hz |
+
+## ESP32 I2C bus (GPIO 8/9)
+
+Only the BNO055 IMU remains on the ESP32 I2C bus:
+
+| Address | Device |
 |---|---|
-| Measurement | Voltage (bus), current (shunt), power |
-| Bus voltage range | 0–26V |
-| Current resolution | ~0.8 mA (at default gain) |
-| Interface | I2C |
-| I2C addresses | 0x40–0x4F (4 address pins) |
-| Supply voltage | 3.0V – 5.5V |
-| Shunt resistor | External (typically 0.1Ω for ≤3.2A) |
-
----
-
-## Breakout Pinout
-
-**Breakout board:** Adafruit INA219 (product #904) — onboard 0.1 Ω precision shunt resistor, measures up to ±3.2A. No external shunt needed.
-
-| Pin | Description |
-|---|---|
-| VCC | Logic power 3–5V |
-| GND | Ground |
-| SDA | I2C data |
-| SCL | I2C clock |
-| VIN+ | High-side + input (connect toward battery +) |
-| VIN− | High-side − input (connect toward load) |
-| A0, A1 | Address select — both open/GND = **0x40** |
-
-Current flows from VIN+ through the onboard 0.1 Ω shunt to VIN−. Place the INA219 **on the main positive rail after the main power switch and before the Pi/motor rail split** — this position measures total robot current draw (Pi + motors combined), giving the most useful data. I2C address: **0x40**. Shares bus with BNO055 (0x28).
-
-> **Recommended wiring order:** Battery (+) → Main switch → INA219 VIN+ → shunt → INA219 VIN− → split to (Power Hat DC barrel) and (TB6612 VM)
-
-> **Optional:** Add a blade fuse between INA219 VIN− and TB6612 VM on the motor branch. Cheap insurance against a motor short taking out the whole rail.
-
----
-
-## Battery Safety Logic (ESP32 Firmware)
-
-```
-Every 200ms (5 Hz):
-    Read voltage, current, power from INA219
-
-    if voltage < WARNING_THRESHOLD:
-        Transmit: BAT <v> <i> <p>  (triggers ROS warning)
-
-    if voltage < CUTOFF_THRESHOLD:
-        Immediately stop all motors (zero PWM on all channels)
-        Transmit: ERR BATTERY_CUTOFF
-```
-
-Suggested thresholds (adjust for your battery chemistry):
-
-| Battery Type | Warning | Cutoff |
-|---|---|---|
-| 2S LiPo (8.4V max) | 7.0V | 6.6V |
-| 3S LiPo (12.6V max) | 10.5V | 9.9V |
-| 4S LiPo (16.8V max) | 14.0V | 13.2V |
-
----
-
-## ROS Telemetry
-
-The ESP32 publishes at 1 Hz:
-
-```
-BAT <voltage> <current> <power>
-```
-
-The `esp32_serial_bridge` node publishes this as `sensor_msgs/BatteryState` on `/battery_state`.
-
----
-
-## Inductive Kickback Warning
-
-> ⚠️ **From the INA219 datasheet:** When switching inductive loads, instantaneous voltage levels may greatly exceed steady-state levels due to inductive kickback. Chip damage can occur without protection.
->
-> In this build, the INA219 monitors the battery/supply rail. The TB6612 motor driver is also on this rail. The **TB6612 has built-in kickback diodes** on its motor outputs, which suppress most kickback. However, rapid direction changes or PWM at high duty cycle can still cause transient voltage spikes on the supply rail.
->
-> Mitigation: place a 100 µF electrolytic + 100 nF ceramic capacitor in parallel across the INA219 VIN+/VIN− input (on the battery side) to absorb transients.
-
----
-
-## Common Issues
-
-| Symptom | Likely Cause |
-|---|---|
-| Voltage reads zero | VIN+ / VIN- swapped or not connected |
-| Current reads negative | Shunt polarity reversed |
-| I2C errors | Missing pull-ups or address conflict with other sensors |
-| Incorrect current reading | Wrong shunt resistance configured in firmware |
+| 0x28 | BNO055 IMU |
+| 0x76 | BME680 environmental sensor (Phase 6, not yet wired) |

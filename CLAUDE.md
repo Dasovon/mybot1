@@ -22,8 +22,8 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone bu
 
 | Layer | Hardware | Key Responsibilities |
 |---|---|---|
-| Embedded controller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | PID motor control, encoder counting, IMU + battery sensing, safety watchdog, micro-ROS publisher |
-| Sensor bridge | Raspberry Pi 5 | micro-ROS agent, LiDAR driver, RealSense driver, EKF, Nav2 (light nodes) |
+| Embedded controller | ESP32-S3-DevKitC-1 on Lonely Binary expansion board | PID motor control, encoder counting, IMU, cmd_vel watchdog, micro-ROS publisher |
+| Sensor bridge | Raspberry Pi 5 | micro-ROS agent, INA219 battery monitor, LiDAR driver, RealSense driver, EKF, Nav2 (light nodes) |
 | High-level compute | Development PC | SLAM Toolbox, Nav2, RViz2, YOLO, rosbag, AI nodes |
 
 ---
@@ -38,7 +38,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean, standalone bu
 | Motor driver | TB6612FNG (dual channel) — **temporary; will upgrade to larger driver + 2 more wheels** | GPIO 10–15 (PWMA, AIN1, AIN2, PWMB, BIN1, BIN2) | ESP32 |
 | Motors + encoders | 4× JGA25-371 DC 12V, 45:1 gear ratio (skid steer, 2 per side) | GPIO 39–42 (quadrature, 1010 CPR, one encoder per side) | ESP32 |
 | IMU | Adafruit BNO055 breakout | I2C GPIO 8/9, addr 0x28 | ESP32 |
-| Battery monitor | Adafruit INA219 breakout | I2C GPIO 8/9, addr 0x40 | ESP32 |
+| Battery monitor | Generic INA219 breakout (6-pin + screw terminals) | Pi I2C-1 (GPIO 2/3), addr 0x40 — series on logic rail (after 3A fuse, before EP-0225) | Pi |
 | Env sensor | BME680 breakout | I2C GPIO 8/9, addr 0x76 — **not yet wired** | ESP32 |
 | 2D LiDAR | Slamtec RPLidar A1 M8 | USB 2.0 → Pi `/dev/rplidar` | Pi |
 | RGB-D camera | Intel RealSense D435 | USB 3.0 → Pi (640×480 @ 15fps, RSUSB) | Pi |
@@ -78,7 +78,7 @@ Common ground: Battery −, EP-0225 GND, Pi GND, ESP32 GND, TB6612FNG GND — al
 
 | GPIO | Function |
 |---|---|
-| 8 | I2C SDA — BNO055 (0x28), INA219 (0x40), BME680 (0x76 planned) |
+| 8 | I2C SDA — BNO055 (0x28), BME680 (0x76 planned) |
 | 9 | I2C SCL |
 | 10 | PWMA — Right side speed (LEDC ch 0, 20 kHz, 8-bit) → TB6612FNG PWMA |
 | 11 | AIN1 — Right side direction 1 → TB6612FNG AIN1 |
@@ -121,10 +121,10 @@ The ESP32-S3 uses **two independent serial connections** to the Pi, on two separ
 
 | Role | ESP32 | Pi device | Purpose |
 |---|---|---|---|
-| micro-ROS + flashing | Native USB CDC, GPIO 19/20 (built-in USB-JTAG, VID 303a:1001) | `/dev/ttyACM0` | ROS topics: odom, IMU, battery, cmd_vel; auto-reset flashing |
-| Display telemetry (Phase 6) | UART0, GPIO 43 TX / 44 RX via Lonely Binary CH340 (VID 1a86:7522) | `/dev/ttyUSB0` | INA219 JSON stream → display daemon |
+| micro-ROS + flashing | Native USB CDC, GPIO 19/20 (built-in USB-JTAG, VID 303a:1001) | `/dev/ttyACM0` | ROS topics: odom, IMU, cmd_vel; auto-reset flashing |
+| Display telemetry (Phase 6) | UART0, GPIO 43 TX / 44 RX via Lonely Binary CH340 (VID 1a86:7522) | `/dev/ttyUSB0` | Reserved — unused until Phase 6 |
 
-**Why two ports:** The display daemon (Phase 6) is a ROS2-independent systemd service. It reads battery voltage from the CH340 UART regardless of whether micro-ROS or ROS2 is running. During Phases 1–5, the CH340 port is unused.
+**Why two ports:** CH340 UART0 is reserved for future use (Phase 6). During Phases 1–5, `/dev/ttyUSB0` is unused. Battery monitoring is handled by the Pi-side INA219 node, not the CH340.
 
 **Firmware transport (validated):** `Serial` (native USB CDC) via four custom `arduino_transport_*` weak-function overrides. Key details:
 - `Serial.setTxTimeoutMs(100)` — prevents partial writes during XRCE entity creation
@@ -163,7 +163,7 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 | `/diff_cont/cmd_vel_unstamped` | Nav2 / twist_mux | ESP32 (via micro-ROS) | 20 Hz |
 | `/diff_cont/odom` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
 | `/imu/imu` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
-| `/battery_state` | ESP32 micro-ROS | monitoring nodes | 1 Hz |
+| `/battery_state` | Pi `battery_publisher` node (INA219 via smbus2) | monitoring nodes, display | 1 Hz |
 | `/odom` | robot_localization | Nav2, SLAM | 20 Hz |
 | `/scan` | rplidar_node | slam_toolbox, Nav2 obstacle layer | ~5.5 Hz |
 | `/camera/camera/depth/color/points` | realsense2_camera | Nav2 voxel layer | ~13 Hz |
@@ -428,7 +428,7 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 ### Safety
 - ESP32 safety watchdog must run continuously, independent of ROS, Wi-Fi, and the dev PC.
 - If no velocity command is received within the timeout window, ESP32 stops the motors immediately.
-- Battery voltage cutoff runs on the ESP32 — never depend on ROS for battery safety.
+- Battery monitoring runs on the Pi (`battery_publisher` node, INA219 on I2C-1). Low-voltage motor cutoff is a **TODO** — implement as a Pi-side watchdog node that publishes `cmd_vel` zeros and calls `motors_stop` via a service when voltage drops below `BAT_CUTOFF_V` (9.9V).
 - **Dev PC failure must never cause a dangerous robot.**
 
 ### Electrical
@@ -496,7 +496,7 @@ The full step-by-step build plan — with files to create, implementation detail
 | Phase | Goal |
 |---|---|
 | 0 | Hardware & environment (complete) |
-| 1 | ESP32 firmware: PID, encoders, IMU, battery, micro-ROS, watchdog |
+| 1 | ESP32 firmware: PID, encoders, IMU, micro-ROS, watchdog |
 | 2 | URDF + TF tree validated in RViz2 |
 | 3 | Sensor bridge + **LiDAR verified on `/scan`** + RealSense + EKF → smooth `/odom` — LiDAR must pass before Phase 4 |
 | 4 | SLAM: build and save a consistent 2D map (requires Phase 3 LiDAR verified) |
@@ -529,8 +529,9 @@ ros2 topic echo /battery_state
 ros2 run tf2_tools view_frames
 ros2 run tf2_ros tf2_echo base_link laser
 
-# I2C sensor check (on ESP32 host via Pi)
-sudo i2cdetect -y 1   # expect: 0x28 (BNO055), 0x40 (INA219)
+# I2C sensor check
+sudo i2cdetect -y 1   # Pi I2C-1: expect 0x40 (INA219)
+# ESP32 I2C (BNO055 at 0x28) visible only via ESP32 debug output — not accessible from Pi directly
 
 # LiDAR stale process fix
 sudo fuser -k /dev/rplidar

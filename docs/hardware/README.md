@@ -14,6 +14,6 @@ Wiring for each component is determined at the corresponding build gate in `docs
 | RPLidar A1 M8 | 2D LiDAR — SLAM geometry | [rplidar.md](rplidar.md) |
 | RealSense D435 | RGB-D depth camera | [realsense_d435.md](realsense_d435.md) |
 | Adafruit BNO055 | IMU — orientation / heading | [bno055_imu.md](bno055_imu.md) |
-| Adafruit INA219 | Battery voltage / current monitor | [ina219_battery_monitor.md](ina219_battery_monitor.md) |
+| Generic INA219 (Pi) | Battery voltage / current monitor — on Pi I2C-1, publishes `/battery_state` | [ina219_pi_battery_monitor.md](ina219_pi_battery_monitor.md) |
 | BME680 | Environmental sensor — Phase 6 | [bme680_environmental.md](bme680_environmental.md) |
 | Waveshare 2.42" OLED | Status display (SSD1309, 128×64, SPI0 on Pi) — Phase 6 | [oled_display.md](oled_display.md) |
