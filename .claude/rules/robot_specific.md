@@ -110,12 +110,13 @@ platform = espressif32@^6.8.0
 
 ## Display daemon
 
-The OLED display daemon is a **systemd service** on the Pi (`mybot-display.service`). It subscribes to `/battery_state` via rclpy and renders voltage + current to the Waveshare 2.42" OLED (SSD1309).
+The OLED display daemon is a **ROS-independent systemd service** on the Pi (`mybot-display.service`). It reads the INA219 directly over Pi I2C-1 and renders voltage/current to the Waveshare 2.42" OLED.
 
 - Source: `scripts/display_daemon.py`
 - Service: `scripts/mybot-display.service`
-- Reads battery data from ROS2 `/battery_state` topic (published by Pi `battery_publisher` node from INA219 at 1 Hz)
-- Renders via luma.oled over SPI0 to Waveshare 2.42" OLED (SSD1309)
+- Battery source: Pi I2C-1 INA219 at `0x40`, using `RANGE_32V` + `GAIN_8_320MV`
+- Independent of `/battery_state`, `microros-agent.service`, and micro-ROS state
+- Renders via `luma.oled` over SPI0 to Waveshare 2.42" OLED (SSD1309)
 - Pi 5 requires `LGPIOAdapter` (lgpio, gpiochip4) instead of RPi.GPIO — already implemented
 - Service `WorkingDirectory=/tmp` required (lgpio creates notification pipes in CWD)
 

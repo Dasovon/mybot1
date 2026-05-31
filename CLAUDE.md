@@ -17,7 +17,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean standalone bui
 | Phase | Status |
 |---|---|
 | 0 — Hardware & Environment | Complete |
-| 1 — ESP32 Firmware | **Complete** — P-only baseline validated; encoders, IMU, watchdog passing gate |
+| 1 — ESP32 Firmware | **Functional baseline complete** — P-only drive, encoders, IMU, and reconnect validated; watchdog reduction to 500 ms remains an open safety improvement |
 | 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, `base_footprint` root added |
 | 3 — Sensor Bridge & EKF | **In progress** — EKF live; LiDAR and `/odom` rate investigation pending |
 | 4 — SLAM | Not started |
@@ -94,7 +94,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **QoS:** `/diff_cont/odom` and `/imu/imu` publishers are RELIABLE (micro-ROS fragmentation requirement — Odometry is ~712 bytes, exceeds 512-byte XRCE MTU). Subscribers must use RELIABLE. SENSOR_QOS (BEST_EFFORT) silently drops these messages.
 - **PWM frequency:** 1 kHz validated on this chassis. 20 kHz caused 10× measured speed loss. Do not change without hardware re-validation.
 - **Watchdog:** Firmware currently `WATCHDOG_MS = 2000` (2 seconds). Target is 500 ms. **Open safety mismatch** — do not assume the robot stops within 500 ms after command loss until firmware is updated, flashed, and stop-time validated.
-- **CH340 (`/dev/ttyUSB0`):** Debug console only at 115200 baud. Not battery telemetry or display data. Display daemon reads `/battery_state` via ROS 2.
+- **CH340 (`/dev/ttyUSB0`):** Debug console only at 115200 baud. Not battery telemetry or display data. Display daemon reads the Pi-side INA219 directly over I2C.
 
 ---
 
@@ -107,7 +107,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 | INA219 reading verification | **Pending** — fix committed 2026-05-30; confirm reading ~9.9–12.6V under load |
 | LiDAR on `/scan` | **Pending** — Phase 3 gate; not yet verified |
 | EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~55 Hz externally after time-sync |
-| Sensor physical offsets in URDF | **Pending** — current positions are placeholders; measure before relying on EKF |
+| Sensor physical offsets in URDF | **Pending** — current positions are placeholders; measure before Phase 4 SLAM-quality validation; do not block Phase 3 service/rate validation |
 
 ---
 
