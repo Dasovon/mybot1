@@ -16,7 +16,7 @@ static constexpr float TWO_PI_F    = 2.0f * (float)M_PI;
 // ---------------------------------------------------------------------------
 // Watchdog — motors stop if no cmd_vel received within this window
 // ---------------------------------------------------------------------------
-static constexpr uint32_t WATCHDOG_MS = 2000;
+static constexpr uint32_t WATCHDOG_MS = 500;  // pending flash + stop-time validation (≤0.6 s criterion)
 
 // ---------------------------------------------------------------------------
 // PID controllers — one per wheel, gains require on-hardware tuning

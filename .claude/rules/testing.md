@@ -141,7 +141,7 @@ for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry
 
 ### Watchdog status
 
-Current firmware runtime value: `WATCHDOG_MS = 2000`. The intended safety target for motor testing is 500 ms. This is an open safety mismatch — do not assume the robot stops within 500 ms after command loss until firmware is updated to 500 ms, flashed, and stop-time validated.
+Source changed to `WATCHDOG_MS = 500` ms. Pending flash and stop-time validation — do not assume the robot stops within 500 ms after command loss until the 500 ms firmware is flashed and stop-time is verified (criterion: motors stop ≤0.6 s after command loss).
 
 ---
 

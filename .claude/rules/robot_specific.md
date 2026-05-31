@@ -74,15 +74,15 @@ duty = constrain(duty, 0, 255);
 - Battery voltage cutoff runs on the **Pi** (`battery_publisher` node, `esp32_serial_bridge` package) — not on the ESP32.
 - Dev PC failure must never cause a dangerous robot
 
-**Watchdog status — open safety mismatch:**
-- Current firmware runtime value: `WATCHDOG_MS = 2000` (2 seconds)
-- Intended safety target: 500 ms
-- Do not claim or assume the robot stops within 500 ms after command loss until firmware is updated, flashed, and stop-time validated
+**Watchdog status — pending flash validation:**
+- Source value changed to `WATCHDOG_MS = 500` ms
+- Not yet flashed or stop-time validated
+- Do not assume the robot stops within 500 ms after command loss until the 500 ms firmware is flashed and stop-time is verified (criterion: motors stop ≤0.6 s after command loss)
 
-Current firmware pattern (actual values):
+Current firmware pattern (source values):
 ```cpp
 unsigned long last_cmd_ms = 0;
-static constexpr uint32_t WATCHDOG_MS = 2000;  // current runtime value; pending safety decision
+static constexpr uint32_t WATCHDOG_MS = 500;  // changed in source; pending flash + stop-time validation
 
 void check_watchdog() {
     if (millis() - last_cmd_ms > WATCHDOG_MS) {

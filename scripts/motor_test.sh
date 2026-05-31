@@ -8,7 +8,7 @@
 # Sequence:
 #   1. Start bag (sqlite3, detached from shell)
 #   2. Drive foreground
-#   3. Stop foreground
+#   3. Stop foreground (also runs via EXIT/INT/TERM trap)
 #   4. Stop bag, verify metadata + sanity gates
 #   5. Analyze only if all gates pass
 #
@@ -26,6 +26,34 @@ STOP_TIMES=20
 BAG_DIR=~/test_logs/test_$(date +%Y%m%d_%H%M%S)
 mkdir -p ~/test_logs
 
+# ── Emergency cleanup trap ────────────────────────────────────────────────────
+# Runs on EXIT, INT, and TERM. Sends zero cmd_vel then stops the bag recorder.
+# Idempotent: CLEANUP_DONE flag prevents double-execution on normal exit.
+BAG_PID=""
+CLEANUP_DONE=false
+
+cleanup() {
+    [ "$CLEANUP_DONE" = true ] && return
+    CLEANUP_DONE=true
+    echo ""
+    echo "[CLEANUP] Sending emergency stop..."
+    for i in $(seq 1 ${STOP_TIMES}); do
+        ros2 topic pub --once \
+            /diff_cont/cmd_vel_unstamped \
+            geometry_msgs/msg/Twist \
+            "{linear: {x: 0.0}, angular: {z: 0.0}}" > /dev/null 2>&1
+        sleep 0.05
+    done
+    echo "[CLEANUP] Stop sent."
+    if [ -n "$BAG_PID" ]; then
+        echo "[CLEANUP] Stopping bag (pid ${BAG_PID})..."
+        kill -INT "$BAG_PID" 2>/dev/null || true
+        wait "$BAG_PID" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
 echo "=== motor_test.sh ==="
 echo "  vx=${VX} m/s  duration=${DURATION}s  (~$(echo "$VX * $DURATION" | bc) m travel)"
 echo "  bag: ${BAG_DIR}"
@@ -36,7 +64,9 @@ echo "│                                                     │"
 echo "│  1. Place robot at start mark, pointed straight     │"
 echo "│  2. Ensure $(echo "$VX * $DURATION" | bc) m of clear space ahead          │"
 echo "│  3. Keep hands clear — robot will move on its own   │"
-echo "│  4. Emergency stop: Ctrl+C  (watchdog fires in 0.5s)│"
+echo "│  4. Emergency stop: Ctrl+C sends repeated zero      │"
+echo "│     cmd_vel. Firmware fallback watchdog is 2.0 s    │"
+echo "│     until 500 ms firmware is flashed and validated. │"
 echo "└─────────────────────────────────────────────────────┘"
 echo ""
 read -r -p "Robot in position and clear? Press Enter to start, Ctrl+C to abort: "
@@ -81,6 +111,7 @@ echo ""
 echo "[4] Stopping bag..."
 kill -INT "$BAG_PID" 2>/dev/null || true
 wait "$BAG_PID" 2>/dev/null || true
+CLEANUP_DONE=true   # normal path complete — EXIT trap is now a no-op
 
 BAG_DB=$(ls "${BAG_DIR}"/*.db3 2>/dev/null | head -1)
 
@@ -117,8 +148,8 @@ def tid(name): return topics.get(name)
 
 odom_vx, odom_wz, pos_x, ts_odom = [], [], [], []
 imu_wz, imu_ax, ts_imu           = [], [], []
-bat_v, bat_i             = [], []
-cmd_vx, ts_cmd           = [], []
+bat_v, bat_i, ts_bat             = [], [], []
+cmd_vx, ts_cmd                   = [], []
 
 for topic_id, timestamp, data in conn.execute(
         "SELECT topic_id, timestamp, data FROM messages ORDER BY timestamp"):
@@ -138,6 +169,7 @@ for topic_id, timestamp, data in conn.execute(
         m = deserialize_message(data, BatteryState)
         bat_v.append(m.voltage)
         bat_i.append(m.current)
+        ts_bat.append(timestamp)
     elif topic_id == tid('/diff_cont/cmd_vel_unstamped'):
         m = deserialize_message(data, Twist)
         cmd_vx.append(m.linear.x)
@@ -225,9 +257,9 @@ drive_imu_wz = [v for v, ts in zip(imu_wz, ts_imu)
 drive_imu_ax = [v for v, ts in zip(imu_ax, ts_imu)
                 if t_drive_start <= ts / NS <= t_drive_end]
 
-# Battery samples during drive
-drive_bat_i = [v for v in bat_i]   # 1 Hz — use all; too few to gate precisely
-drive_bat_v = [v for v in bat_v]
+# Battery samples gated to drive window (1 Hz — report sample count)
+drive_bat_i = [v for v, ts in zip(bat_i, ts_bat) if t_drive_start <= ts / NS <= t_drive_end]
+drive_bat_v = [v for v, ts in zip(bat_v, ts_bat) if t_drive_start <= ts / NS <= t_drive_end]
 
 actual_drive_s = t_drive_end - t_drive_start
 ss_span_s      = t_drive_end - t_ss_start
@@ -246,7 +278,7 @@ if ss:
     print(f"\n  [1] Velocity tracking (steady-state: drive+2s → drive_end)")
     print(f"      mean={m:.4f} m/s  std={std:.4f}  error={err:+.1f}%")
     print(f"      negative samples: {neg}")
-    print(f"      P-only baseline:  mean=0.0952  error=-4.8%")
+    print(f"      P-only baseline (cmd-vel-gated):  mean=0.0992  error=-0.8%")
     print(f"      {'PASS' if abs(err) < 10 and neg == 0 else 'FAIL'}")
 else:
     print(f"\n  [1] Velocity tracking: NO SAMPLES in steady-state window")
@@ -276,14 +308,16 @@ if drive_imu_ax:
     print(f"      [NOTE] High values = chassis vibration, not PID oscillation")
     print(f"      [NOTE] Re-evaluate after BNO055 mechanical isolation")
 
-# 4. Current draw
+# 4. Current draw (gated to drive window)
 if drive_bat_i:
     mi  = statistics.mean(drive_bat_i)
     pki = max(drive_bat_i)
     mv  = statistics.mean(drive_bat_v)
-    print(f"\n  [4] Battery under load")
+    print(f"\n  [4] Battery under load (drive window, n={len(drive_bat_i)} samples)")
     print(f"      voltage={mv:.2f} V  current mean={mi:.3f} A  peak={pki:.3f} A")
     print(f"      {'PASS' if pki < 2*mi else 'WARN'}  (peak < 2× mean)")
+else:
+    print(f"\n  [4] Battery: no samples in drive window (1 Hz rate; check bag spans full drive)")
 
 # 5. Distance accuracy — delta pose over steady-state window
 if len(ss_pos) >= 2:
@@ -292,7 +326,7 @@ if len(ss_pos) >= 2:
     derr     = (delta_x - expected) / expected * 100 if expected else 0
     print(f"\n  [5] Distance accuracy (delta pose over steady-state window)")
     print(f"      window={ss_span_s:.2f}s  expected={expected:.3f} m  actual Δx={delta_x:.3f} m  error={derr:+.1f}%")
-    print(f"      P-only baseline: ~-6.2%")
+    print(f"      P-only baseline (cmd-vel-gated): ~-1.7%")
     print(f"      {'PASS' if abs(derr) < 10 else 'FAIL'}  (threshold ±10%)")
 
 print(f"\n{sep}")

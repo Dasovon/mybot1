@@ -93,7 +93,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **micro-ROS reconnect:** Fully automatic. Pings agent every 2s; 3 failures → motors stop → entities destroyed → retry every 1s. Recovery ≤7s with no physical RESET required.
 - **QoS:** `/diff_cont/odom` and `/imu/imu` publishers are RELIABLE (micro-ROS fragmentation requirement — Odometry is ~712 bytes, exceeds 512-byte XRCE MTU). Subscribers must use RELIABLE. SENSOR_QOS (BEST_EFFORT) silently drops these messages.
 - **PWM frequency:** 1 kHz validated on this chassis. 20 kHz caused 10× measured speed loss. Do not change without hardware re-validation.
-- **Watchdog:** Firmware currently `WATCHDOG_MS = 2000` (2 seconds). Target is 500 ms. **Open safety mismatch** — do not assume the robot stops within 500 ms after command loss until firmware is updated, flashed, and stop-time validated.
+- **Watchdog:** Source changed to `WATCHDOG_MS = 500` ms. **Pending flash and stop-time validation** — do not assume the robot stops within 500 ms until the 500 ms firmware is flashed and stop-time is verified (criterion: motors stop ≤0.6 s after command loss).
 - **CH340 (`/dev/ttyUSB0`):** Debug console only at 115200 baud. Not battery telemetry or display data. Display daemon reads the Pi-side INA219 directly over I2C.
 
 ---
@@ -103,7 +103,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 | Item | Status |
 |---|---|
 | Encoder CPR recount | **Blocked** — 10-rev direct count test not yet run post-wiring-fix |
-| Watchdog 500 ms | **Open** — firmware still 2000 ms; requires firmware change + flash + stop-time validation |
+| Watchdog 500 ms | **Pending flash** — source changed to 500 ms; requires flash + stop-time validation (≤0.6 s criterion) |
 | INA219 reading verification | **Pending** — fix committed 2026-05-30; confirm reading ~9.9–12.6V under load |
 | LiDAR on `/scan` | **Pending** — Phase 3 gate; not yet verified |
 | EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~55 Hz externally after time-sync |
