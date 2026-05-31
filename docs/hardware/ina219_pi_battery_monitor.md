@@ -1,10 +1,12 @@
-# INA219 Battery Monitor — Raspberry Pi (Direct)
+# INA219 Battery Monitor — Raspberry Pi
 
-Second INA219 wired directly to the Pi for battery monitoring independent of ESP32 / micro-ROS.
+One INA219 wired to the Pi I2C-1 bus. This is the **only** active INA219 in the system — the ESP32 does not own an INA219 and does not perform battery monitoring.
 
-**Why:** Display and health check need battery voltage at boot, before micro-ROS establishes its session (which can take 1–6 minutes). Reading from the Pi directly via smbus2 eliminates the ROS2 dependency for battery display.
-
-**Note:** The existing INA219 on the ESP32 I2C bus (GPIO 8/9, 0x40) remains unchanged — the ESP32 uses it for battery cutoff (safety watchdog). This is a second, independent chip for monitoring only.
+**Architecture:**
+- `battery_publisher` node (Pi, `esp32_serial_bridge` package) reads this INA219 and publishes `/battery_state` at 1 Hz.
+- `display_daemon.py` also reads this INA219 directly over I2C for boot-time display (before ROS is up).
+- Low-voltage cutoff (below 9.9V) is enforced by `battery_publisher` publishing zero cmd_vel — this is a ROS-level race against Nav2/teleop and is provisional Phase 3 behavior; priority arbitration (e.g. `twist_mux`) is required before Nav2.
+- The ESP32 has no battery monitoring responsibility.
 
 ---
 
@@ -125,16 +127,21 @@ sudo reboot
 pip3 install pi-ina219 --break-system-packages
 ```
 
-Quick test:
+Quick test — **always use explicit gain/range** or the sensor reads 32.76V / NaN:
 ```python
 from ina219 import INA219
 
-ina = INA219(0.1, busnum=1)   # 0.1Ω shunt, I2C bus 1
-ina.configure()
-print(f"Voltage: {ina.voltage():.2f} V")
+ina = INA219(0.1, busnum=1, max_expected_amps=3.0)
+ina.configure(
+    voltage_range=INA219.RANGE_32V,
+    gain=INA219.GAIN_8_320MV,
+)
+print(f"Voltage: {ina.voltage():.2f} V")   # expect 9.9–12.6V
 print(f"Current: {ina.current():.1f} mA")
 print(f"Power:   {ina.power():.1f} mW")
 ```
+
+**Why explicit config is required:** default `configure()` initialises with `GAIN_1_40MV` (max 0.4A at 0.1Ω). The logic rail draws 1–2A, triggering OVF. The bus voltage register then reads 0x7FFF = 32.764V and `current()` returns garbage. `RANGE_32V` + `GAIN_8_320MV` covers the full operating range cleanly.
 
 ---
 
@@ -146,9 +153,8 @@ No ROS2 subprocess — battery is available from the first second of boot.
 
 ---
 
-## Two-INA219 summary
+## Active INA219 summary
 
-| Unit | Bus | Address | Reader | Purpose |
+| Unit | Bus | Address | Readers | Purpose |
 |---|---|---|---|---|
-| ESP32 INA219 | ESP32 I2C (GPIO 8/9) | 0x40 | ESP32 firmware | Battery cutoff safety watchdog, publishes `/battery_state` |
-| Pi INA219 | Pi I2C-1 (GPIO 2/3) | 0x40 | pi-ina219 in display_daemon | Display + health check, always-on regardless of ROS2 state |
+| Pi INA219 | Pi I2C-1 (GPIO 2/3) | 0x40 | `battery_publisher` node (ROS); `display_daemon.py` (direct I2C) | Battery telemetry, low-voltage cutoff, display |
