@@ -45,7 +45,7 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 
 | Constant | Status | Notes |
 |---|---|---|
-| `ENC_CPR` | **Pending re-validation** | Runtime firmware currently uses `990`; historical documentation says `1010`. Re-run direct 10-revolution, 3-trial-per-wheel count test after corrected wiring before standardizing. |
+| `ENC_CPR` | **Pending re-validation** | Firmware uses `990`; historical docs say `1010`. Protocol: 5 rev/trial × 3 trials/wheel, raw count only, CPR = |Δcount| / 5. Left Trial 1 = 987.0 CPR (9870 / 10 rev, valid and comparable). Do not update until all 6 trials reviewed. |
 | `wheel_radius` | `0.03414 m` | Measured: 68.27 mm diameter |
 | `wheel_separation` | `0.177 m` | Measured center-to-center |
 

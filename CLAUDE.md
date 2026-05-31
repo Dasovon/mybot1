@@ -85,7 +85,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **Platform:** ROS 2 Jazzy, Raspberry Pi 5 + ESP32-S3 over native USB micro-ROS (`/dev/ttyACM0`, 921600 baud).
 - **Drive base:** P-only control validated; straight drive confirmed at 0.10 m/s. KI introduction is next Phase 3 task.
 - **Encoder signal path:** Fixed (bad breadboard section identified and corrected). PCNT + `setFilter(400)` validated under motor load. EMA disabled (`VEL_ALPHA = 1.0`) — do not reintroduce EMA; it causes KD phase lag.
-- **Encoder CPR:** Unresolved. Firmware uses `990`; historical docs say `1010`. Re-run 10-revolution direct count test (3 trials per wheel) after corrected wiring before standardizing either value.
+- **Encoder CPR:** Unresolved. Firmware uses `990`; historical docs say `1010`. Direct-count protocol: 5 revolutions per trial, 3 valid trials per wheel, raw encoder count change only. CPR = |Δcount| / 5. Left Trial 1 (9870 counts / 10 rev = 987.0 CPR) remains valid and comparable. Do not update firmware constant until all 6 trials are reviewed.
 - **Battery monitoring:** Pi-side INA219 is authoritative. Must be configured `RANGE_32V` + `GAIN_8_320MV` — default gain causes 32.76V / NaN. Fix committed 2026-05-30; verify reading ~9.9–12.6V before trusting low-voltage cutoff. **Verified 2026-05-31** — RANGE_32V + GAIN_8_320MV confirmed in source; voltage readings 12.0–12.3 V across session, consistent with 3S LiPo; INA219 measures logic-rail current only (EP-0225 branch), not motor current — motor current flows through the separate 10A fuse path and is not visible to the INA219.
 - **IMU under motor load:** BNO055 `angular_velocity.z` is vibration-contaminated (validated: mean +0.113 rad/s, spikes to ±11.3 rad/s during straight drive). EKF `imu0_config[11]` (vyaw) is **disabled**. Do not use IMU yaw to tune motors or drive EKF yaw fusion. Re-enable only after mechanical isolation and re-validation.
 - **EKF `/odom` rate:** Configured 20 Hz; observed ~8 Hz externally (root cause identified: robot_localization suppresses publish when `getLastMeasurementTime()` has not advanced past `last_published_stamp_`; probable cause is ESP32 timestamp offset queuing measurements; under investigation — do not assume 20 Hz is correct until resolved).
@@ -103,7 +103,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 
 | Item | Status |
 |---|---|
-| Encoder CPR recount | **Deferred** — CH340 debug-output failure unresolved (cause unknown); Left Trial 1 = 987.0 CPR (direct count); bag-derived odom method rejected as circular; do not update firmware CPR constants until direct-count path is restored |
+| Encoder CPR recount | **Deferred** — CH340 debug-output failure unresolved; Left Trial 1 = 987.0 CPR (9870 counts / 10 rev, valid and comparable); revised protocol: 5 rev/trial, 3 trials/wheel, raw count only; do not update firmware CPR constants until all 6 trials reviewed |
 | Watchdog 500 ms | **Validated 2026-05-31** — 0.538 s stop after command loss; criterion ≤ 0.600 s PASSED |
 | INA219 reading verification | **Verified 2026-05-31** — voltage-based cutoff confirmed; current reading is logic rail only, not motor current |
 | PID velocity gate (≤ ±10% error) | **Passed 2026-05-31** — steady-state error −0.9% at 0.10 m/s (P-only, KP=0.25); distance error −2.7%; encoder yaw drift −0.015 rad/s mean |
