@@ -1,6 +1,6 @@
 # Hardware Constants — mybot1
 
-**Do not change any value in this file without explicit user instruction. These are validated hardware values.**
+**Do not change GPIO pins, I2C addresses, or mechanical dimensions without explicit user instruction. Encoder CPR is pending re-validation — see encoder constants section.**
 
 ## ESP32-S3 GPIO Map
 
@@ -17,7 +17,7 @@
 | 17 | (free) |
 | 18 | (free) |
 | 19, 20 | Native USB D−/D+ → Pi `/dev/ttyACM0` — micro-ROS transport + flashing (921600 baud) |
-| 43 | UART0 TX via Lonely Binary CH340 → Pi `/dev/ttyUSB0` — display telemetry JSON (9600 baud) |
+| 43 | UART0 TX via Lonely Binary CH340 → Pi `/dev/ttyUSB0` — debug console (115200 baud) |
 | 44 | UART0 RX via Lonely Binary CH340 ← Pi `/dev/ttyUSB0` |
 | 39 | Right encoder B |
 | 40 | Left encoder A ⚠️ EMI — 100 nF cap to GND required |
@@ -26,7 +26,7 @@
 
 **Right side = front_right + rear_right motors in parallel. Left side = front_left + rear_left motors in parallel. TB6612FNG is temporary — future upgrade to larger driver + 2 more wheels planned.**
 
-GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38/48 (RGB LED), 43/44 (UART0/CH340 — display telemetry), 0/45/46 (strapping).
+GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36/37 (flash), 38/48 (RGB LED), 43/44 (UART0/CH340 — debug console), 0/45/46 (strapping).
 
 ## I2C Addresses (ESP32 I2C bus, GPIO 8/9)
 
@@ -41,13 +41,13 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 |---|---|
 | INA219 battery monitor | 0x40 |
 
-## Encoder constants (validated on floor)
+## Encoder constants
 
-| Constant | Value |
-|---|---|
-| `ENC_CPR` | 1010 (2× quadrature, 45:1 gear ratio) |
-| `wheel_radius` | 0.03414 m (measured: 68.27 mm dia) |
-| `wheel_separation` | 0.177 m (measured center-to-center) |
+| Constant | Status | Notes |
+|---|---|---|
+| `ENC_CPR` | **Pending re-validation** | Runtime firmware currently uses `990`; historical documentation says `1010`. Re-run direct 10-revolution, 3-trial-per-wheel count test after corrected wiring before standardizing. |
+| `wheel_radius` | `0.03414 m` | Measured: 68.27 mm diameter |
+| `wheel_separation` | `0.177 m` | Measured center-to-center |
 
 ## Motor specs (JGA25-371 / 25SG-370CA-45-EN)
 
@@ -99,8 +99,8 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 | Role | ESP32 port | Pi device | Notes |
 |---|---|---|---|
 | micro-ROS + flashing | Native USB CDC, GPIO 19/20 | `/dev/ttyACM0` | Built-in USB-JTAG/Serial (303a:1001); 921600 baud; auto-reset via 1200bps touch |
-| Display telemetry | ROS2 `/battery_state` topic | n/a | Battery data via micro-ROS → display_daemon rclpy subscriber |
+| Debug console | UART0, GPIO 43/44 via CH340 | `/dev/ttyUSB0` | Firmware state, PID timing, micro-ROS transitions; 115200 baud; read-only from Pi side |
 
 Required firmware build flags: `-DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1 -DCORE_DEBUG_LEVEL=0`
 
-Note: `-DCORE_DEBUG_LEVEL=0` suppresses Arduino-level debug output to UART0, keeping the CH340 telemetry stream clean.
+Note: `-DCORE_DEBUG_LEVEL=0` suppresses Arduino framework chatter on UART0, keeping the CH340 debug stream limited to intentional `Serial0.printf()` output.

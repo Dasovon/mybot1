@@ -35,9 +35,10 @@ URDF xacro pattern:
 ## EKF configuration notes
 
 - IMU orientation is **disabled** (magnetometer unreliable on metal chassis)
-- IMU angular velocity and linear acceleration are **enabled**
+- IMU angular velocity (`angular_velocity.x/y`) and linear acceleration are **enabled**
+- **IMU gyro z (`imu0_config[11]`) is disabled** — BNO055 angular_velocity.z is vibration-contaminated under motor load (validated: mean +0.113 rad/s, spikes to ±11.3 rad/s during straight drive). EKF uses encoder odom exclusively for yaw. Re-enable only after foam/rubber mechanical isolation and re-validation (target: mean < 0.05 rad/s, spikes < 10 in 8 s).
 - Input: `/imu/imu` (BNO055 via micro-ROS) + `/diff_cont/odom` (encoder odometry)
-- Output: `/odom` at 20 Hz
+- Output: `/odom` — configured 20 Hz; observed rate under investigation (measured ~55 Hz externally after time-sync)
 
 ## Nav2 configuration
 
@@ -70,16 +71,21 @@ duty = constrain(duty, 0, 255);
 
 - Watchdog must run on ESP32 independently of ROS, Wi-Fi, and dev PC
 - If no `/diff_cont/cmd_vel_unstamped` received within timeout: stop motors immediately
-- Battery voltage cutoff runs on the **Pi** (`battery_publisher` node, `esp32_serial_bridge` package) — not on the ESP32. Do not depend on ROS cutoff until INA219 reads correctly (see Audit Notes in CLAUDE.md).
+- Battery voltage cutoff runs on the **Pi** (`battery_publisher` node, `esp32_serial_bridge` package) — not on the ESP32.
 - Dev PC failure must never cause a dangerous robot
 
-Watchdog pattern in firmware:
+**Watchdog status — open safety mismatch:**
+- Current firmware runtime value: `WATCHDOG_MS = 2000` (2 seconds)
+- Intended safety target: 500 ms
+- Do not claim or assume the robot stops within 500 ms after command loss until firmware is updated, flashed, and stop-time validated
+
+Current firmware pattern (actual values):
 ```cpp
 unsigned long last_cmd_ms = 0;
-const unsigned long WATCHDOG_TIMEOUT_MS = 500;
+static constexpr uint32_t WATCHDOG_MS = 2000;  // current runtime value; pending safety decision
 
 void check_watchdog() {
-    if (millis() - last_cmd_ms > WATCHDOG_TIMEOUT_MS) {
+    if (millis() - last_cmd_ms > WATCHDOG_MS) {
         stop_motors();
     }
 }
@@ -108,11 +114,10 @@ The OLED display daemon is a **systemd service** on the Pi (`mybot-display.servi
 
 - Source: `scripts/display_daemon.py`
 - Service: `scripts/mybot-display.service`
-- Reads battery data from ROS2 `/battery_state` topic (published by ESP32 micro-ROS at 1 Hz)
+- Reads battery data from ROS2 `/battery_state` topic (published by Pi `battery_publisher` node from INA219 at 1 Hz)
 - Renders via luma.oled over SPI0 to Waveshare 2.42" OLED (SSD1309)
 - Pi 5 requires `LGPIOAdapter` (lgpio, gpiochip4) instead of RPi.GPIO — already implemented
 - Service `WorkingDirectory=/tmp` required (lgpio creates notification pipes in CWD)
-- **Note:** Display requires microros-agent.service to be running (source of `/battery_state`)
 
 ## Common debugging commands
 
@@ -126,15 +131,14 @@ lsusb | grep 1a86                        # CH340 (ttyUSB0) — needs data-capabl
 source /opt/ros/jazzy/setup.bash && source ~/microros_ws/install/setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 
-# Topic health
-ros2 topic hz /diff_cont/odom
-ros2 topic hz /imu/imu
+# Topic health — use RELIABLE QoS to match odom/IMU publisher; default BEST_EFFORT may miss messages
+ros2 topic hz /diff_cont/odom --qos-reliability reliable
+ros2 topic hz /imu/imu --qos-reliability reliable
 ros2 topic hz /scan
 ros2 topic echo /battery_state
 
-# Monitor CH340 display telemetry stream (stop display daemon first to avoid port conflict)
-sudo systemctl stop mybot-display.service
-sudo cat /dev/ttyUSB0
+# Monitor CH340 debug console (firmware state, PID timing, micro-ROS transitions)
+sudo cat /dev/ttyUSB0   # 115200 baud
 
 # Display daemon
 sudo systemctl status mybot-display.service

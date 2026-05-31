@@ -112,7 +112,17 @@ Every phase gate in `docs/architecture/build_plan.md` must have a corresponding 
 
 **The robot has proven strong enough to damage itself. These rules are absolute.**
 
-### The only two approved cmd_vel forms
+### Normal approved motion path — use the test script
+
+```bash
+# On Pi — handles bag, drive, stop, and cleanup atomically:
+~/motor_test.sh [vx_m_s] [duration_s]
+~/motor_test.sh 0.10 8
+```
+
+This is the required path for all motor tests. It starts the bag before motion and stops it after. Do not assemble manual bag + publisher combos.
+
+### Manual cmd_vel forms (script internals / emergency only)
 
 ```bash
 # Drive (foreground — SSH blocks until complete):
@@ -127,15 +137,11 @@ ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{lin
 for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"; sleep 0.05; done
 ```
 
-### Use the test script — no manual bag + publisher combos
-
-```bash
-# On Pi — handles bag, drive, stop, and cleanup atomically:
-~/motor_test.sh [vx_m_s] [duration_s]
-~/motor_test.sh 0.10 8
-```
-
 **Never use `run_in_background: true` on a cmd_vel publisher.** A background publisher keeps running after a queued stop finishes. Robot hit a wall 2026-05-30 from this pattern.
+
+### Watchdog status
+
+Current firmware runtime value: `WATCHDOG_MS = 2000`. The intended safety target for motor testing is 500 ms. This is an open safety mismatch — do not assume the robot stops within 500 ms after command loss until firmware is updated to 500 ms, flashed, and stop-time validated.
 
 ---
 
@@ -161,8 +167,8 @@ for i in {1..20}; do ros2 topic pub --once /diff_cont/cmd_vel_unstamped geometry
 After every motor test, report all of the following before changing any parameter:
 
 1. **Velocity tracking** — plot or tabulate `cmd_vel.linear.x` vs `odom.twist.linear.x` over time. Compute steady-state error as a percentage of commanded velocity.
-2. **Yaw drift** — report `imu.angular_velocity.z` mean and peak during the run. A value above ±0.05 rad/s during a straight-drive command indicates wheel imbalance.
-3. **Jerk / oscillation** — report `imu.linear_acceleration.x` peak-to-peak. Values above ±1.0 m/s² indicate PID oscillation or mechanical issues.
+2. **Yaw drift** — report `odom.twist.angular.z` (encoder) mean and peak. This is the authoritative yaw signal. `imu.angular_velocity.z` is also recorded but is vibration-contaminated under motor load (validated: mean +0.113 rad/s, spikes to ±11.3 rad/s during straight drive); report it as a diagnostic metric only, not as evidence of wheel imbalance.
+3. **Jerk / oscillation** — report `imu.linear_acceleration.x` peak-to-peak as a diagnostic. Note: acceleration spikes are also contaminated by gearbox vibration and are not a reliable PID oscillation indicator until the IMU is mechanically isolated. Do not use IMU jerk as the basis for PID tuning decisions.
 4. **Current draw** — report `battery_state.current` mean and peak. A peak above 2× steady-state current suggests stall or windup.
 5. **Distance accuracy** — report `odom.pose.pose.position.x` at end of run vs. expected (`cmd_vel * duration`).
 

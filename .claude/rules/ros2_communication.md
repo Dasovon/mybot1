@@ -8,19 +8,20 @@
 
 ## Authoritative topic list
 
-| Topic | Type | Publisher | Subscriber | Rate |
-|---|---|---|---|---|
-| `/diff_cont/cmd_vel_unstamped` | `geometry_msgs/Twist` | Nav2 / twist_mux | ESP32 micro-ROS | 20 Hz |
-| `/diff_cont/odom` | `nav_msgs/Odometry` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
-| `/imu/imu` | `sensor_msgs/Imu` | ESP32 micro-ROS | robot_localization EKF | 30 Hz |
-| `/battery_state` | `sensor_msgs/BatteryState` | ESP32 micro-ROS / serial bridge | monitoring | 1 Hz |
-| `/odom` | `nav_msgs/Odometry` | robot_localization | Nav2, SLAM | 20 Hz |
-| `/scan` | `sensor_msgs/LaserScan` | rplidar_node | slam_toolbox, Nav2 | ~5.5 Hz |
-| `/camera/camera/depth/color/points` | `sensor_msgs/PointCloud2` | realsense2_camera | Nav2 voxel layer | ~13 Hz |
-| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | realsense2_camera | YOLO (future) | 15 Hz |
-| `/camera/camera/depth/image_rect_raw` | `sensor_msgs/Image` | realsense2_camera | depth consumers | 15 Hz |
+| Topic | Publisher | Consumer | QoS | Rate |
+|---|---|---|---|---:|
+| `/diff_cont/cmd_vel_unstamped` | Nav2 / test script | ESP32 micro-ROS | RELIABLE / VOLATILE | 20 Hz |
+| `/diff_cont/odom` | ESP32 micro-ROS | EKF / diagnostics | RELIABLE / VOLATILE | target 30 Hz |
+| `/imu/imu` | ESP32 micro-ROS | EKF / diagnostics | RELIABLE / VOLATILE | target 30 Hz |
+| `/battery_state` | Pi `battery_publisher` (INA219) | display / monitoring | RELIABLE / VOLATILE | 1 Hz |
+| `/odom` | `robot_localization` | SLAM / Nav2 / diagnostics | RELIABLE / VOLATILE | configured 20 Hz; observed rate under investigation |
+| `/scan` | RPLidar driver | SLAM / Nav2 | BEST_EFFORT / VOLATILE | ~5.5 Hz |
 
-Do not rename these topics without updating: CLAUDE.md, the EKF config, Nav2 config, and all subscribers.
+**QoS note — `/diff_cont/odom` and `/imu/imu`:** Both micro-ROS publishers are `rclc_publisher_init_default` (RELIABLE). `nav_msgs/Odometry` serializes to ~712 bytes, exceeding the 512-byte XRCE MTU; RELIABLE enables fragmentation. BEST_EFFORT silently drops oversized messages. Subscribers must use RELIABLE or a compatible profile — do not use SENSOR_QOS (BEST_EFFORT) for these topics.
+
+**Rate monitoring rule:** Do not diagnose topic rates with default `ros2 topic hz` alone. Use explicitly compatible QoS and count received messages over a defined window. `/odom` currently observed at ~55 Hz externally after time-sync; root cause under investigation — do not assume 20 Hz until resolved.
+
+Do not rename these topics without updating the EKF config, Nav2 config, and all subscribers.
 
 ## QoS profiles — use these, never default
 
@@ -68,8 +69,8 @@ auto STATE_QOS = rclcpp::QoS(1)
 ### When to use each
 | Profile | Use for |
 |---|---|
-| `SENSOR_QOS` (BEST_EFFORT) | `/scan`, `/imu/imu`, `/diff_cont/odom`, `/camera/*` |
-| `CONTROL_QOS` (RELIABLE/VOLATILE) | `/diff_cont/cmd_vel_unstamped`, `/battery_state` |
+| `SENSOR_QOS` (BEST_EFFORT) | `/scan`, `/camera/*` |
+| `CONTROL_QOS` (RELIABLE/VOLATILE) | `/diff_cont/cmd_vel_unstamped`, `/diff_cont/odom`, `/imu/imu`, `/battery_state` |
 | `STATE_QOS` (RELIABLE/TRANSIENT_LOCAL) | `/robot_description`, latched status topics |
 
 Publisher and subscriber QoS **must be compatible** or ROS will silently drop messages.
@@ -79,17 +80,21 @@ Publisher and subscriber QoS **must be compatible** or ROS will silently drop me
 ```
 map
  └── odom
-      └── base_link
-           ├── laser
-           ├── imu_link
-           ├── camera_link
-           │     └── camera_depth_frame
-           ├── left_wheel
-           └── right_wheel
+      └── base_footprint          (EKF publishes odom → base_footprint)
+           └── base_link          (URDF fixed joint: base_footprint → base_link)
+                ├── laser
+                ├── imu_link
+                ├── camera_link
+                │     └── camera_depth_frame
+                ├── front_left_wheel
+                ├── front_right_wheel
+                ├── rear_left_wheel
+                └── rear_right_wheel
 ```
 
 - `map → odom`: published by slam_toolbox
-- `odom → base_link`: published by robot_localization EKF
+- `odom → base_footprint`: published by robot_localization EKF
+- `base_footprint → base_link`: URDF fixed joint, published by robot_state_publisher
 - `base_link → *`: published by robot_state_publisher from URDF
 
 TF2 lookup pattern:
@@ -125,7 +130,7 @@ Import in C++: `#include "robot_msgs/msg/battery_status.hpp"`
 | Port | ESP32 | Pi device | Purpose |
 |---|---|---|---|
 | Native USB CDC | GPIO 19/20 (built-in USB-JTAG, VID 303a:1001) | `/dev/ttyACM0` | micro-ROS transport + flashing (921600 baud) |
-| CH340 UART0 | GPIO 43 TX / 44 RX (Lonely Binary on-board CH340, VID 1a86:7522) | `/dev/ttyUSB0` | Display telemetry JSON at 2 Hz (9600 baud) |
+| CH340 UART0 | GPIO 43 TX / 44 RX (Lonely Binary on-board CH340, VID 1a86:7522) | `/dev/ttyUSB0` | Debug console — firmware state, PID timing, micro-ROS transitions (115200 baud) |
 
 micro-ROS agent command:
 ```bash
@@ -133,9 +138,4 @@ source /opt/ros/jazzy/setup.bash && source ~/microros_ws/install/setup.bash
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 ```
 
-CH340 JSON format from ESP32 (sent every 500 ms via Serial0.print):
-```json
-{"v":12.34,"i":1.23,"p":15.16,"ok":1,"ts":12345}
-```
-
-Monitor raw CH340 stream: `sudo cat /dev/ttyUSB0`
+Monitor CH340 debug stream: `sudo cat /dev/ttyUSB0` (115200 baud)
