@@ -109,7 +109,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 | Watchdog 500 ms | **Validated 2026-05-31** — 0.538 s stop after command loss; criterion ≤ 0.600 s PASSED |
 | INA219 reading verification | **Verified 2026-05-31** — voltage-based cutoff confirmed; current reading is logic rail only, not motor current |
 | PID velocity gate (≤ ±10% error) | **Passed 2026-05-31** — steady-state error −0.9% at 0.10 m/s (P-only, KP=0.25); distance error −2.7%; encoder yaw drift −0.015 rad/s mean |
-| EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~8 Hz (not ~55 Hz as previously noted); root cause mechanism identified in robot_localization source; timestamp offset hypothesis to be tested |
+| EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~8 Hz (not ~55 Hz as previously noted); root cause mechanism identified in robot_localization source; timestamp offset hypothesis to be tested. **Related finding:** `ekf_filter_node` subscribes to `/diff_cont/odom` and `/imu/imu` with BEST_EFFORT QoS; both publishers are RELIABLE. RELIABLE→BEST_EFFORT is technically compatible in Fast-DDS (messages flow) but contradicts the documented requirement. Fix EKF YAML to use RELIABLE on both inputs when investigating the rate anomaly — the mismatch may be a contributing factor. |
 | LiDAR on `/scan` | **Verified** — publishing confirmed; software motor-off via DTR/RTS failed on this adapter; physical cutoff requires switched USB power (future hardware) |
 | Sensor physical offsets in URDF | **Pending** — current positions are placeholders; measure before Phase 4 SLAM-quality validation; do not block Phase 3 service/rate validation |
 
