@@ -461,7 +461,16 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - CH340 UART0 (GPIO 43/44, `/dev/ttyUSB0`) is reserved for display telemetry JSON (Phase 6) — do not use it for micro-ROS.
 - `pub_odom` and `pub_imu` must use `rclc_publisher_init_default` (RELIABLE), not BEST_EFFORT. `nav_msgs/Odometry` is ~712 bytes serialized — exceeds the 512-byte XRCE MTU and is silently dropped on BEST_EFFORT streams.
 - Never change serial device, encoder pins, motor polarity, or controller YAML all at once during debugging. Change one thing, observe, repeat.
-- If `micro_ros_agent` gets stuck after OTA flash or watchdog reset: `sudo systemctl restart microros-agent.service`.
+- **micro-ROS reconnect is fully automatic (firmware 2026-05-30).** The ESP32 pings the agent every 2 s while connected; 3 consecutive failures → motors stop → entities destroyed → reconnect loop retries every 1 s. Recovery after agent restart is ≤7 s with no physical intervention. If topics don't recover within 10 s after an agent restart, tap ESP32 RESET (handles USB glitch, not agent logic).
+- **Operational procedure after agent restart:**
+  ```bash
+  sudo systemctl restart microros-agent.service
+  sleep 7
+  ros2 topic hz /diff_cont/odom --window 10
+  # if still 0 Hz → tap ESP32 RESET
+  ```
+- **Long-term hardware fix (TODO):** Wire ESP32 EN/RST pin to a Pi GPIO through a transistor/reset circuit so the Pi can hard-reset the ESP32 automatically without physical access.
+- **CH340 debug console** (`/dev/ttyUSB0`, 115200 baud) prints all micro-ROS state transitions: `[uROS] ping fail N/3`, `[uROS] agent lost`, `[uROS] CONNECTED`. Use it to diagnose reconnect issues before assuming a hardware fault.
 - **Before flashing firmware:** always `sudo systemctl stop microros-agent.service && sudo systemctl mask microros-agent.service` first. The service auto-restarts independently of `robot-launch.service` and grabs `/dev/ttyACM0` mid-write. Unmask and restart after flash completes.
 - **~200 ms gaps on `/diff_cont/odom` and `/imu/imu` are telemetry-only — they do not indicate control-loop stalls.** Validated 2026-05-30: CH340 timing test ran 35 s with zero `[WARN] control dt > 15 ms` events. The 100 Hz PID loop runs clean throughout. The gap is in the micro-ROS 30 Hz publish path (executor/USB CDC), not in motor control. Root cause of worst-case gaps: zombie `ros2 bag record` processes creating DDS congestion — always kill stale bag processes before testing (`pkill -f 'ros2 bag record'`). Residual ~200 ms gap with clean graph is a known micro-ROS/USB CDC timing artifact; it does not affect closed-loop control quality.
 - **Control loop timing guard (permanent):** firmware fires `Serial0.printf("[WARN] control dt %.2f ms\n", dt_ms)` on CH340 (`/dev/ttyUSB0`, 115200 baud) if any 100 Hz loop iteration exceeds 15 ms. Zero warnings = loop is healthy. This check costs nothing at runtime and gives instant proof of stalls if they ever appear.

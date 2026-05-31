@@ -1,4 +1,5 @@
 #include "microros.h"
+#include "motors.h"
 
 #include <micro_ros_arduino.h>
 
@@ -80,10 +81,24 @@ static char frame_imu_link[]  = "imu_link";
 // ---------------------------------------------------------------------------
 enum State { WAITING_AGENT, AGENT_CONNECTED, AGENT_DISCONNECTED };
 static State state = WAITING_AGENT;
-static uint32_t last_ping_ms      = 0;
-static uint32_t last_pub_ok_ms    = 0;  // last time odom published successfully
-static const uint32_t PING_INTERVAL_MS   = 10000;  // WAITING_AGENT only
-static const uint32_t PUB_TIMEOUT_MS     = 30000;  // 30 s with no successful publish → session dead
+static uint32_t last_ping_ms   = 0;
+static uint32_t last_pub_ok_ms = 0;
+
+// WAITING_AGENT: ping every 1 s until agent responds.
+static const uint32_t PING_INTERVAL_MS = 1000;
+
+// AGENT_CONNECTED: ping every 2 s to detect agent loss.
+// 3 consecutive failures → session dead → destroy + reconnect.
+// Root bug this fixes: rcl_publish returns OK even to a dead agent (kernel
+// USB buffer accepts bytes regardless), so the old publish-watchdog never
+// fired. Active pinging is the only reliable detection mechanism.
+static const uint32_t CONNECTED_PING_INTERVAL_MS = 2000;
+static const int      PING_FAIL_MAX              = 3;
+static int            ping_fail_count            = 0;
+
+// Backup watchdog: if no odom published successfully in 10 s, session is
+// dead regardless of ping state. Secondary to the ping mechanism.
+static const uint32_t PUB_TIMEOUT_MS = 10000;
 
 static bool create_entities() {
     allocator = rcl_get_default_allocator();
@@ -158,11 +173,13 @@ void microros_init() {
     // Serial (USB CDC, GPIO 19/20) opened in arduino_transport_open on first agent ping
     // Serial0 (UART0 via CH340, GPIO 43/44) used for debug output → Pi /dev/ttyUSB0
     Serial0.begin(115200);
-    Serial0.printf("[uROS] init: PING_INTERVAL=%lums PUB_TIMEOUT=%lums\n",
-                   (unsigned long)PING_INTERVAL_MS, (unsigned long)PUB_TIMEOUT_MS);
+    Serial0.printf("[uROS] init: PING_INTERVAL=%lums CONNECTED_PING=%lums FAIL_MAX=%d PUB_TIMEOUT=%lums\n",
+                   (unsigned long)PING_INTERVAL_MS, (unsigned long)CONNECTED_PING_INTERVAL_MS,
+                   PING_FAIL_MAX, (unsigned long)PUB_TIMEOUT_MS);
     set_microros_transports();
-    state        = WAITING_AGENT;
-    last_ping_ms = millis();
+    state          = WAITING_AGENT;
+    last_ping_ms   = millis() - PING_INTERVAL_MS;  // ping on first spin, not after a delay
+    ping_fail_count = 0;
 }
 
 void microros_spin() {
@@ -175,34 +192,62 @@ void microros_spin() {
                 if (rmw_uros_ping_agent(500, 3) == RMW_RET_OK) {
                     Serial0.printf("[uROS] agent found, creating entities t=%lums\n", (unsigned long)now);
                     if (create_entities()) {
-                        last_pub_ok_ms = now;  // grace period before publish watchdog starts
+                        last_pub_ok_ms  = now;
+                        last_ping_ms    = now;
+                        ping_fail_count = 0;
                         state = AGENT_CONNECTED;
                         Serial0.printf("[uROS] CONNECTED t=%lums\n", (unsigned long)now);
                     } else {
-                        Serial0.printf("[uROS] create_entities FAILED t=%lums\n", (unsigned long)now);
+                        Serial0.printf("[uROS] create_entities FAILED, retrying t=%lums\n", (unsigned long)now);
                     }
                 }
             }
             break;
 
         case AGENT_CONNECTED:
-            // Spin executor to handle incoming cmd_vel — no ping here; pinging when
-            // connected corrupts the XRCE session state on the first failure, causing
-            // an immediate DELETE_CLIENT that bypasses our fail-count threshold.
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
-            // Publish watchdog: if no odom has been published successfully in
-            // PUB_TIMEOUT_MS, the session is dead (agent gone or transport broken).
+
+            // Active liveness ping every CONNECTED_PING_INTERVAL_MS.
+            // Uses a fail counter so a single transient USB glitch doesn't tear down
+            // a healthy session. 3 consecutive failures = agent is truly gone.
+            // This is the primary detection mechanism — rcl_publish returns OK even
+            // to a dead agent (kernel USB buffer accepts bytes), so the publish
+            // watchdog below is only a backup.
+            if (now - last_ping_ms >= CONNECTED_PING_INTERVAL_MS) {
+                last_ping_ms = now;
+                if (rmw_uros_ping_agent(200, 1) != RMW_RET_OK) {
+                    ping_fail_count++;
+                    Serial0.printf("[uROS] ping fail %d/%d t=%lums\n",
+                                   ping_fail_count, PING_FAIL_MAX, (unsigned long)now);
+                    if (ping_fail_count >= PING_FAIL_MAX) {
+                        Serial0.printf("[uROS] agent lost — stopping motors, destroying t=%lums\n",
+                                       (unsigned long)now);
+                        motors_stop();
+                        destroy_entities();
+                        state = AGENT_DISCONNECTED;
+                    }
+                } else {
+                    ping_fail_count = 0;
+                }
+            }
+
+            // Backup publish watchdog — catches cases where pings succeed but the
+            // session is silently not delivering data (e.g. transport corruption).
             if (now - last_pub_ok_ms > PUB_TIMEOUT_MS) {
-                Serial0.printf("[uROS] publish watchdog fired, destroying t=%lums\n", (unsigned long)now);
+                Serial0.printf("[uROS] publish watchdog fired, stopping motors, destroying t=%lums\n",
+                               (unsigned long)now);
+                motors_stop();
                 destroy_entities();
+                ping_fail_count = 0;
                 state = AGENT_DISCONNECTED;
             }
             break;
 
         case AGENT_DISCONNECTED:
             Serial0.printf("[uROS] DISCONNECTED → WAITING t=%lums\n", (unsigned long)now);
-            state        = WAITING_AGENT;
-            last_ping_ms = now;
+            ping_fail_count = 0;
+            state           = WAITING_AGENT;
+            last_ping_ms    = now - PING_INTERVAL_MS;  // ping on next spin, not after a full delay
             break;
     }
 }
