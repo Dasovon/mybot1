@@ -4,12 +4,29 @@
 # Usage (run on dev PC):
 #   ./scripts/shutdown_pi.sh
 #
-# Initiates a clean shutdown, waits until the Pi halts, then tells you
-# it is safe to kill power. Run this every time before cutting battery.
+# Stops all robot services cleanly, then initiates OS shutdown.
+# Run this every time before cutting battery power.
 
 PI=ubuntu@pi5bot
 
-echo "Shutting down ${PI}..."
+echo "Stopping robot services on ${PI}..."
+
+ssh "${PI}" bash -s <<'REMOTE'
+# Kill any active bag recordings first
+pkill -f "ros2 bag record" 2>/dev/null && echo "  killed zombie bag processes" || true
+
+# Stop services in dependency order (display depends on ROS, agent holds the serial port)
+for svc in mybot-display.service robot-launch.service microros-agent.service; do
+    if systemctl is-active --quiet "$svc"; then
+        sudo systemctl stop "$svc"
+        echo "  stopped $svc"
+    else
+        echo "  $svc already stopped"
+    fi
+done
+REMOTE
+
+echo "All services stopped. Initiating shutdown..."
 ssh "${PI}" "sudo shutdown now" 2>/dev/null || true
 
 echo "Waiting for Pi to halt..."
@@ -19,4 +36,4 @@ until ! ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
 done
 
 echo ""
-echo "✓ Pi has shut down cleanly. Safe to kill power."
+echo "Pi has shut down cleanly. Safe to kill power."
