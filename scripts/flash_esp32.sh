@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Flash ESP32-S3 firmware from a Pi or dev PC.
+# Flash ESP32-S3 firmware. Run on the Pi where /dev/ttyACM0 is local.
 # Uses 'python3 -m esptool' (esptool v4+/v5+) with modern hyphenated flags.
 #
-# Usage:
-#   ./scripts/flash_esp32.sh [port]
+# Production flash path: native USB CDC on /dev/ttyACM0 only.
+# Do NOT flash through CH340 /dev/ttyUSB0 — that port is for debug output only.
 #
-# Default port: /dev/ttyACM0 (native USB CDC)
-# For the USB-UART adapter: /dev/ttyUSB0
+# Usage (on Pi):
+#   ~/bot_ws/scripts/flash_esp32.sh
 #
 # PlatformIO build outputs (relative to firmware/esp32/):
 #   .pio/build/esp32-s3-devkitc-1/bootloader.bin   → 0x0
@@ -42,6 +42,26 @@ BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 \
 if [ -z "$BOOT_APP0" ]; then
     echo "ERROR: boot_app0.bin not found in PlatformIO packages." >&2
     echo "       Install PlatformIO and run 'pio run' in firmware/esp32/ first." >&2
+    exit 1
+fi
+
+# Stop micro-ROS agent so it cannot grab /dev/ttyACM0 between esptool's
+# 1200bps reset touch and the write connection (reproduces mid-write failure).
+# Trap ensures agent is always restored on exit, even if flash fails.
+restore_agent() {
+    echo "Restoring micro-ROS agent..."
+    sudo systemctl unmask microros-agent.service 2>/dev/null || true
+    sudo systemctl start microros-agent.service 2>/dev/null || true
+}
+trap restore_agent EXIT
+
+echo "Stopping micro-ROS agent..."
+sudo systemctl stop  microros-agent.service 2>/dev/null || true
+sudo systemctl mask  microros-agent.service 2>/dev/null || true
+sudo fuser -k "${PORT}" 2>/dev/null || true
+# Verify port is free before proceeding
+if sudo fuser "${PORT}" 2>/dev/null; then
+    echo "ERROR: ${PORT} still held by another process. Aborting." >&2
     exit 1
 fi
 

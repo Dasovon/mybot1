@@ -40,50 +40,55 @@ ensure_service() {
     fi
 }
 
-# Count messages on a topic using QoS-safe echo (not ros2 topic hz).
-# Prints a stamped field for topics with headers, raw echo for others.
+# Count messages on a topic using QoS-compatible echo (not ros2 topic hz).
+# ros2 topic hz has a QoS subscriber mismatch that produces false low readings
+# (e.g. /odom showed ~1.2 Hz on a healthy 20 Hz EKF — documented 2026-05-30).
+#
+# Args: topic  window_s  qos (best_effort|reliable)
+# QoS compatibility: BEST_EFFORT subscriber works with RELIABLE or BEST_EFFORT
+# publishers. RELIABLE subscriber fails against BEST_EFFORT publishers.
+# Use best_effort for sensor streams, reliable for EKF/state outputs.
 count_topic_msgs() {
     local topic="$1"
-    local field="$2"      # e.g. "header.stamp.sec" — use "." for any field
-    local window_s="$3"
-    if [[ "$field" == "." ]]; then
-        timeout "$window_s" ros2 topic echo "$topic" --once 2>/dev/null | \
-            grep -c '.' || true
-    else
-        timeout "$window_s" ros2 topic echo "$topic" --field "$field" 2>/dev/null | \
-            grep -cE '^[0-9]' || true
-    fi
+    local window_s="$2"
+    local qos="${3:-best_effort}"
+    timeout "$window_s" ros2 topic echo "$topic" \
+        --field header.stamp.sec \
+        --qos-reliability "$qos" 2>/dev/null \
+        | grep -cE '^[[:space:]]*[0-9]+$' || true
 }
 
 check_topic_rate() {
     local topic="$1"
-    local field="$2"
-    local min_msgs="$3"   # minimum message count in the window
-    local window_s="$4"
+    local min_msgs="$2"
+    local window_s="$3"
+    local qos="$4"
     local label="$5"
 
     local count
-    count=$(count_topic_msgs "$topic" "$field" "$window_s")
+    count=$(count_topic_msgs "$topic" "$window_s" "$qos")
     local hz=$(( count / window_s ))
 
     if [[ "$count" -ge "$min_msgs" ]]; then
-        log_pass "$label: ${count} msgs/${window_s}s (~${hz} Hz)"
+        log_pass "$label: ${count} msgs/${window_s}s (~${hz} Hz) [qos:${qos}]"
     elif [[ "$count" -gt 0 ]]; then
-        log_fail "$label: ${count} msgs/${window_s}s — need ≥${min_msgs} in ${window_s}s"
+        log_fail "$label: ${count} msgs/${window_s}s — need ≥${min_msgs} [qos:${qos}]"
     else
-        log_fail "$label: no messages in ${window_s}s"
+        log_fail "$label: no messages in ${window_s}s [qos:${qos}]"
     fi
 }
 
 check_topic_alive() {
     local topic="$1"
     local timeout_s="$2"
-    local label="$3"
+    local qos="$3"
+    local label="$4"
 
-    if timeout "$timeout_s" ros2 topic echo "$topic" --once 2>/dev/null | grep -q '.'; then
-        log_pass "$label: alive"
+    if timeout "$timeout_s" ros2 topic echo "$topic" --once \
+            --qos-reliability "$qos" 2>/dev/null | grep -q '.'; then
+        log_pass "$label: alive [qos:${qos}]"
     else
-        log_fail "$label: no message in ${timeout_s}s"
+        log_fail "$label: no message in ${timeout_s}s [qos:${qos}]"
     fi
 }
 
@@ -167,20 +172,21 @@ source /home/ubuntu/bot_ws/install/setup.bash
 # Wait briefly for EKF to settle after services start
 sleep 3
 
-# ESP32 micro-ROS topics — published at 30 Hz, require ≥15 msgs in 5s
-check_topic_rate /diff_cont/odom "header.stamp.sec" 15 5 "/diff_cont/odom (ESP32 odom)"
-check_topic_rate /imu/imu        "header.stamp.sec" 15 5 "/imu/imu (ESP32 IMU)"
+# ESP32 micro-ROS topics — RELIABLE publisher, 30 Hz target.
+# Require ≥100 msgs in 5s (~20 Hz floor — allows some USB CDC jitter).
+check_topic_rate /diff_cont/odom 100 5 best_effort "/diff_cont/odom (ESP32 odom ~30 Hz)"
+check_topic_rate /imu/imu        100 5 best_effort "/imu/imu (ESP32 IMU ~30 Hz)"
 
-# LiDAR — published at ~6 Hz, require ≥4 msgs in 5s
-check_topic_rate /scan "header.stamp.sec" 4 5 "/scan (LiDAR)"
+# LiDAR — BEST_EFFORT publisher, ~6 Hz target. Require ≥15 msgs in 5s (~3 Hz floor).
+check_topic_rate /scan 15 5 best_effort "/scan (LiDAR ~6 Hz)"
 
-# EKF filtered odometry — published at 20 Hz.
-# NOTE: ros2 topic hz /odom gives false low readings (~1.2 Hz) due to QoS
-# subscriber mismatch. Use echo-count method only.
-check_topic_rate /odom "header.stamp.sec" 10 5 "/odom (EKF filtered)"
+# EKF filtered odometry — RELIABLE publisher, 20 Hz target. Require ≥70 msgs in 5s.
+# Use reliable QoS to match the EKF publisher. Use echo-count, NOT ros2 topic hz
+# (ros2 topic hz /odom showed false ~1.2 Hz on a healthy 20 Hz EKF — QoS artifact).
+check_topic_rate /odom 70 5 reliable "/odom (EKF filtered ~20 Hz)"
 
-# Battery state — 1 Hz, just check alive
-check_topic_alive /battery_state 5 "/battery_state"
+# Battery state — RELIABLE publisher, 1 Hz. Just check alive.
+check_topic_alive /battery_state 5 reliable "/battery_state"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. TF transforms
@@ -244,7 +250,8 @@ import sys, subprocess, yaml
 
 try:
     out = subprocess.run(
-        ['ros2', 'topic', 'echo', '/diff_cont/odom', '--once'],
+        ['ros2', 'topic', 'echo', '/diff_cont/odom', '--once',
+         '--qos-reliability', 'best_effort'],
         capture_output=True, text=True, timeout=6,
         env={**__import__('os').environ}
     )
