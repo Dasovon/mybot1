@@ -72,9 +72,9 @@ static sensor_msgs__msg__Imu     imu_msg;
 static geometry_msgs__msg__Twist cmd_vel_msg;
 
 // Frame ID string buffers — set once in create_entities(), reused every publish.
-static char frame_odom[]      = "odom";
-static char frame_base_link[] = "base_link";
-static char frame_imu_link[]  = "imu_link";
+static char frame_odom[]           = "odom";
+static char frame_base_footprint[] = "base_footprint";
+static char frame_imu_link[]       = "imu_link";
 
 // ---------------------------------------------------------------------------
 // State machine
@@ -143,9 +143,9 @@ static bool create_entities() {
     odom_msg.header.frame_id.data     = frame_odom;
     odom_msg.header.frame_id.size     = 4;
     odom_msg.header.frame_id.capacity = 5;
-    odom_msg.child_frame_id.data      = frame_base_link;
-    odom_msg.child_frame_id.size      = 9;
-    odom_msg.child_frame_id.capacity  = 10;
+    odom_msg.child_frame_id.data      = frame_base_footprint;
+    odom_msg.child_frame_id.size      = 14;
+    odom_msg.child_frame_id.capacity  = 15;
 
     imu_msg.header.frame_id.data      = frame_imu_link;
     imu_msg.header.frame_id.size      = 8;
