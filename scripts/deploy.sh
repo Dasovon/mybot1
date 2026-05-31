@@ -17,6 +17,7 @@ SERVICES=(
     mybot-display.service
     mybot-health.service
     robot-launch.service
+    mybot-lidar.service
 )
 
 echo "=== mybot1 service deployment ==="
@@ -44,8 +45,14 @@ echo ""
 echo "[3] Enabling services (start on boot)"
 for svc in "${SERVICES[@]}"; do
     if systemctl list-unit-files | grep -q "^${svc}"; then
-        sudo systemctl enable "$svc"
-        echo "  enabled: ${svc}"
+        if [ "$svc" = "mybot-lidar.service" ]; then
+            # LiDAR is installed but NOT auto-enabled — start manually when needed
+            sudo systemctl disable "$svc" 2>/dev/null || true
+            echo "  installed (not auto-enabled): ${svc}"
+        else
+            sudo systemctl enable "$svc"
+            echo "  enabled: ${svc}"
+        fi
     else
         echo "  SKIP: ${svc} not found in systemd"
     fi
@@ -54,6 +61,7 @@ done
 # ── Start services now ──────────────────────────────────────────────────────
 echo ""
 echo "[4] Starting services"
+echo "  Note: mybot-lidar.service is NOT auto-started — run 'sudo systemctl start mybot-lidar.service' when LiDAR is needed"
 for svc in microros-agent.service mybot-battery.service mybot-display.service robot-launch.service; do
     if systemctl list-unit-files | grep -q "^${svc}"; then
         sudo systemctl restart "$svc" && echo "  started: ${svc}" || echo "  WARN: ${svc} failed to start"

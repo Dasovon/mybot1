@@ -1,0 +1,15 @@
+<launch>
+  <!-- Core robot stack only: robot_state_publisher + EKF. No LiDAR.
+       Use mybot-bringup.launch.xml for the full stack (SLAM sessions).
+       Requires: microros-agent.service running (ESP32 publishing
+                 /diff_cont/odom + /imu/imu)
+       Produces: /tf, /odom (20 Hz) -->
+
+  <!-- URDF → robot_state_publisher + joint_state_publisher
+       Publishes: /robot_description, static sensor TF frames -->
+  <include file="$(find-pkg-share robot_description)/launch/description.launch.py"/>
+
+  <!-- robot_localization EKF: /diff_cont/odom + /imu/imu → /odom
+       IMU vyaw disabled (BNO055 vibration contamination — see ekf.yaml) -->
+  <include file="$(find-pkg-share robot_bringup)/launch/ekf.launch.xml"/>
+</launch>

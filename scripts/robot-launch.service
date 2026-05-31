@@ -1,5 +1,5 @@
 [Unit]
-Description=mybot1 Phase 3 bringup — robot_state_publisher + EKF + LiDAR
+Description=MyBot ROS 2 Core Bringup — robot_state_publisher + EKF (no LiDAR)
 After=network.target microros-agent.service
 Wants=microros-agent.service
 
@@ -7,9 +7,10 @@ Wants=microros-agent.service
 Type=simple
 User=ubuntu
 WorkingDirectory=/tmp
-ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && source /home/ubuntu/bot_ws/install/setup.bash && ros2 launch robot_bringup mybot-bringup.launch.xml"
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /home/ubuntu/bot_ws/install/setup.bash && ros2 launch robot_bringup mybot-core.launch.xml'
 Restart=on-failure
-RestartSec=5
+RestartSec=3
 TimeoutStopSec=15
 
 [Install]
