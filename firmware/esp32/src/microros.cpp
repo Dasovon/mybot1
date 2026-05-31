@@ -151,6 +151,26 @@ static bool create_entities() {
     imu_msg.header.frame_id.size      = 8;
     imu_msg.header.frame_id.capacity  = 9;
 
+    // Odometry covariance — encoder-derived, constant per-axis uncertainty.
+    // Zero covariance = "perfect certainty" which is never true and causes
+    // robot_localization to silently patch the values. Set realistic diagonals.
+    // Unused axes (z, roll, pitch for a 2D diff-drive) set to large value.
+    // Pose covariance (6×6, row-major index = row*6 + col):
+    odom_msg.pose.covariance[0]  = 0.05;   // x
+    odom_msg.pose.covariance[7]  = 0.05;   // y
+    odom_msg.pose.covariance[14] = 1e9;    // z  (unused)
+    odom_msg.pose.covariance[21] = 1e9;    // roll  (unused)
+    odom_msg.pose.covariance[28] = 1e9;    // pitch (unused)
+    odom_msg.pose.covariance[35] = 0.10;   // yaw — the one r_l was patching
+
+    // Twist covariance:
+    odom_msg.twist.covariance[0]  = 0.01;  // vx
+    odom_msg.twist.covariance[7]  = 1e9;   // vy  (diff-drive: no lateral motion)
+    odom_msg.twist.covariance[14] = 1e9;   // vz  (unused)
+    odom_msg.twist.covariance[21] = 1e9;   // vroll  (unused)
+    odom_msg.twist.covariance[28] = 1e9;   // vpitch (unused)
+    odom_msg.twist.covariance[35] = 0.05;  // vyaw
+
     // Orientation not provided (magnetometer disabled) — flag with covariance[0] = -1
     imu_msg.orientation_covariance[0] = -1.0;
 
