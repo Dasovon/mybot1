@@ -1,6 +1,6 @@
 {
   "env": {
-    "ROS_DISTRO": "humble",
+    "ROS_DISTRO": "jazzy",
     "COLCON_DEFAULTS_DIR": ".colcon"
   },
   "additionalDirectories": [
