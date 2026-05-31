@@ -27,8 +27,11 @@ BAG_DIR=~/test_logs/test_$(date +%Y%m%d_%H%M%S)
 mkdir -p ~/test_logs
 
 # ── Emergency cleanup trap ────────────────────────────────────────────────────
-# Runs on EXIT, INT, and TERM. Sends zero cmd_vel then stops the bag recorder.
-# Idempotent: CLEANUP_DONE flag prevents double-execution on normal exit.
+# Two separate handlers:
+#   cleanup()    — sends zero cmd_vel + stops bag. Idempotent. Called by both paths.
+#   abort_test() — used for INT/TERM: runs cleanup then exits immediately (130).
+#                  Without the explicit exit, Bash returns from the signal handler
+#                  and continues execution after the interrupted command.
 BAG_PID=""
 CLEANUP_DONE=false
 
@@ -41,18 +44,26 @@ cleanup() {
         ros2 topic pub --once \
             /diff_cont/cmd_vel_unstamped \
             geometry_msgs/msg/Twist \
-            "{linear: {x: 0.0}, angular: {z: 0.0}}" > /dev/null 2>&1
+            "{linear: {x: 0.0}, angular: {z: 0.0}}" >/dev/null 2>&1 || true
         sleep 0.05
     done
     echo "[CLEANUP] Stop sent."
-    if [ -n "$BAG_PID" ]; then
+    if [ -n "${BAG_PID:-}" ]; then
         echo "[CLEANUP] Stopping bag (pid ${BAG_PID})..."
         kill -INT "$BAG_PID" 2>/dev/null || true
         wait "$BAG_PID" 2>/dev/null || true
     fi
 }
 
-trap cleanup EXIT INT TERM
+abort_test() {
+    echo ""
+    echo "[ABORT] Test interrupted. Stopping robot and discarding analysis."
+    cleanup
+    exit 130
+}
+
+trap cleanup EXIT
+trap abort_test INT TERM
 
 echo "=== motor_test.sh ==="
 echo "  vx=${VX} m/s  duration=${DURATION}s  (~$(echo "$VX * $DURATION" | bc) m travel)"
