@@ -35,6 +35,15 @@ for f in bootloader.bin partitions.bin firmware.bin; do
     fi
 done
 
+# Warn if firmware.bin is more than 1 hour old — the Pi's build directory
+# can contain a stale binary from a previous local build while the dev PC
+# has a newer one. Always copy the dev-PC binary here before flashing:
+#   scp firmware/esp32/.pio/build/esp32-s3-devkitc-1/firmware.bin ubuntu@pi5bot:~/bot_ws/firmware/esp32/.pio/build/esp32-s3-devkitc-1/firmware.bin
+FW_AGE=$(( $(date +%s) - $(stat -c %Y "${BUILD_DIR}/firmware.bin") ))
+if [[ $FW_AGE -gt 3600 ]]; then
+    echo "WARNING: firmware.bin is $(( FW_AGE / 3600 ))h old — is this the latest build from the dev PC?" >&2
+fi
+
 # boot_app0.bin resets otadata so bootloader always picks app0 (slot 0).
 # Located in the PlatformIO Arduino framework — find it dynamically.
 BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 \
