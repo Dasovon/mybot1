@@ -173,9 +173,12 @@ source /home/ubuntu/bot_ws/install/setup.bash
 sleep 3
 
 # ESP32 micro-ROS topics — RELIABLE publisher, 30 Hz target.
+# Subscriber uses reliable to match production QoS path — odom/IMU were explicitly
+# set to rclc_publisher_init_default (RELIABLE) because nav_msgs/Odometry exceeds
+# the 512-byte XRCE MTU and requires fragmentation; BEST_EFFORT silently drops it.
 # Require ≥100 msgs in 5s (~20 Hz floor — allows some USB CDC jitter).
-check_topic_rate /diff_cont/odom 100 5 best_effort "/diff_cont/odom (ESP32 odom ~30 Hz)"
-check_topic_rate /imu/imu        100 5 best_effort "/imu/imu (ESP32 IMU ~30 Hz)"
+check_topic_rate /diff_cont/odom 100 5 reliable "/diff_cont/odom (ESP32 odom ~30 Hz)"
+check_topic_rate /imu/imu        100 5 reliable "/imu/imu (ESP32 IMU ~30 Hz)"
 
 # LiDAR — BEST_EFFORT publisher, ~6 Hz target. Require ≥15 msgs in 5s (~3 Hz floor).
 check_topic_rate /scan 15 5 best_effort "/scan (LiDAR ~6 Hz)"
@@ -251,7 +254,7 @@ import sys, subprocess, yaml
 try:
     out = subprocess.run(
         ['ros2', 'topic', 'echo', '/diff_cont/odom', '--once',
-         '--qos-reliability', 'best_effort'],
+         '--qos-reliability', 'reliable'],
         capture_output=True, text=True, timeout=6,
         env={**__import__('os').environ}
     )
