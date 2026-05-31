@@ -48,6 +48,7 @@ static constexpr float VEL_ALPHA = 1.0f;  // No EMA lag — PCNT setFilter(400) 
 static uint32_t last_control_ms  = 0;  // 100 Hz
 static uint32_t last_pub_ms      = 0;  // 30 Hz  (odom + IMU)
 static uint32_t last_enc_log_ms  = 0;  // 2 Hz   (raw PCNT count debug)
+static uint32_t last_enc_diag_ms = 0;  // 4 Hz   (diagnostic encoder count topic)
 
 // ---------------------------------------------------------------------------
 // setup
@@ -169,6 +170,14 @@ void loop() {
         long raw_r = encoders_get_right();
         Serial0.printf("[ENC] L=%ld R=%ld  vel_l=%.3f vel_r=%.3f  odom_x=%.4f\n",
                        raw_l, raw_r, vel_l_filt, vel_r_filt, odom_x);
+    }
+
+    // -----------------------------------------------------------------------
+    // 4 Hz — raw encoder counts on /diagnostics/encoder_counts
+    // -----------------------------------------------------------------------
+    if (now - last_enc_diag_ms >= 250) {
+        last_enc_diag_ms = now;
+        microros_publish_enc_diag(encoders_get_left(), encoders_get_right());
     }
 
     // -----------------------------------------------------------------------

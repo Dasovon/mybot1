@@ -46,6 +46,7 @@ extern "C" size_t arduino_transport_read(struct uxrCustomTransport* transport,
 
 #include <nav_msgs/msg/odometry.h>
 #include <sensor_msgs/msg/imu.h>
+#include <std_msgs/msg/int64_multi_array.h>
 #include <geometry_msgs/msg/twist.h>
 
 // ---------------------------------------------------------------------------
@@ -65,11 +66,14 @@ static rclc_executor_t  executor;
 
 static rcl_publisher_t    pub_odom;
 static rcl_publisher_t    pub_imu;
+static rcl_publisher_t               pub_enc_diag;
 static rcl_subscription_t sub_cmd_vel;
 
 static nav_msgs__msg__Odometry   odom_msg;
 static sensor_msgs__msg__Imu     imu_msg;
 static geometry_msgs__msg__Twist cmd_vel_msg;
+static std_msgs__msg__Int64MultiArray enc_diag_msg;
+static int64_t                        enc_data[2];
 
 // Frame ID string buffers — set once in create_entities(), reused every publish.
 static char frame_odom[]           = "odom";
@@ -120,6 +124,17 @@ static bool create_entities() {
             &pub_imu, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
             "imu/imu") != RCL_RET_OK) return false;
+
+    // Encoder diagnostic — RELIABLE, 4 Hz, temporary CPR calibration aid
+    if (rclc_publisher_init_default(
+            &pub_enc_diag, &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int64MultiArray),
+            "diagnostics/encoder_counts") != RCL_RET_OK) return false;
+
+    enc_diag_msg.data.data     = enc_data;
+    enc_diag_msg.data.size     = 2;
+    enc_diag_msg.data.capacity = 2;
+    enc_diag_msg.layout.data_offset = 0;
 
     // cmd_vel subscriber — RELIABLE
     if (rclc_subscription_init_default(
@@ -179,8 +194,9 @@ static bool create_entities() {
 
 static void destroy_entities() {
     rclc_executor_fini(&executor);
-    rcl_publisher_fini(&pub_odom, &node);
-    rcl_publisher_fini(&pub_imu,  &node);
+    rcl_publisher_fini(&pub_odom,     &node);
+    rcl_publisher_fini(&pub_imu,      &node);
+    rcl_publisher_fini(&pub_enc_diag, &node);
     rcl_subscription_fini(&sub_cmd_vel, &node);
     rcl_node_fini(&node);
     rclc_support_fini(&support);
@@ -325,6 +341,13 @@ void microros_publish_imu(float ax, float ay, float az,
     imu_msg.angular_velocity.z    = gz;
 
     rcl_publish(&pub_imu, &imu_msg, nullptr);
+}
+
+void microros_publish_enc_diag(long left, long right) {
+    if (state != AGENT_CONNECTED) return;
+    enc_data[0] = (int64_t)left;
+    enc_data[1] = (int64_t)right;
+    rcl_publish(&pub_enc_diag, &enc_diag_msg, nullptr);
 }
 
 float    microros_cmd_linear()   { return g_cmd_linear; }
