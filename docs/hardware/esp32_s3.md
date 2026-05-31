@@ -80,7 +80,7 @@ Encoders use the ESP32 **PCNT** (Pulse Counter) hardware unit via the `ESP32Enco
 
 - `setFilter(400)` rejects pulses shorter than 5 µs, providing hardware glitch rejection against motor switching noise.
 - Software EMA is disabled: `VEL_ALPHA = 1.0`. Do not reintroduce EMA — it causes phase lag that destabilizes KD.
-- Encoder CPR: **pending re-validation**. Firmware currently uses `990`; historical documentation says `1010`. Re-run a direct 10-revolution, 3-trial-per-wheel count test after corrected wiring before standardizing either value.
+- Encoder CPR: **1010 counts per wheel revolution** — validated 2026-05-31 using `/diagnostics/encoder_counts` and a 3 × 1.500 m straight push test. Trials 2 and 3 accepted as the repeatable calibration set: Left 1010.5 / 1008.9 CPR, Right 1009.2 / 1009.2 CPR. Trial 1 right reading of 1020.3 CPR excluded as a directional push outlier. Firmware constant `ENC_CPR_F = 1010.0f`.
 
 ⚠️ **GPIO 40/41 EMI:** The left encoder signal path had a bad breadboard section (root cause confirmed by GPIO swap test). This has been corrected. 100 nF ceramic caps from GPIO 40 → GND and GPIO 41 → GND remain required to guard against future switching noise.
 
@@ -128,7 +128,7 @@ Build flag `-DCORE_DEBUG_LEVEL=0` suppresses Arduino framework chatter, keeping 
 
 ## Safety Rules
 
-- The watchdog is `WATCHDOG_MS = 500` ms in source — **pending flash and stop-time validation** (criterion: motors stop ≤0.6 s after command loss). Do not assume 500 ms is in effect until validated.
+- The watchdog is `WATCHDOG_MS = 500` ms — **validated 2026-05-31** (measured stop time 0.538 s after command loss; criterion ≤0.600 s, PASSED).
 - Battery low-voltage cutoff runs on the **Pi** (`battery_publisher` node) — not on the ESP32. The Pi publishes zero cmd_vel and initiates OS shutdown when voltage drops below 9.9V.
 - micro-ROS reconnect is fully automatic: pings agent every 2s; 3 consecutive failures → motors stop → entities destroyed → retry every 1s.
 - `rmw_uros_sync_session(1000)` is called during connect/reconnect to synchronize ESP32 clock to Pi wall clock. This blocks for up to ~1 second; motors must be stationary during connection.

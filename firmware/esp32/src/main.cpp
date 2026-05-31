@@ -10,13 +10,13 @@
 // ---------------------------------------------------------------------------
 static constexpr float WHEEL_SEP   = 0.177f;   // m, center-to-center
 static constexpr float WHEEL_RAD   = 0.03414f; // m (measured: 68.27mm dia)
-static constexpr float ENC_CPR_F   = 990.0f;   // counts per wheel revolution (11 PPR × 2 edges × 45:1 gear, half-quad PCNT)
+static constexpr float ENC_CPR_F   = 1010.0f;  // counts per wheel revolution — measured 2026-05-31 via 3 × 1.5m push test (mean L=1008.5, R=1012.9; Trials 2+3: 1006–1011)
 static constexpr float TWO_PI_F    = 2.0f * (float)M_PI;
 
 // ---------------------------------------------------------------------------
 // Watchdog — motors stop if no cmd_vel received within this window
 // ---------------------------------------------------------------------------
-static constexpr uint32_t WATCHDOG_MS = 500;  // pending flash + stop-time validation (≤0.6 s criterion)
+static constexpr uint32_t WATCHDOG_MS = 500;  // validated 2026-05-31: 0.538 s stop after command loss (criterion ≤0.600 s, PASSED)
 
 // ---------------------------------------------------------------------------
 // PID controllers — one per wheel, gains require on-hardware tuning

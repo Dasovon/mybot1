@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Flash ESP32-S3 firmware. Run on the Pi where /dev/ttyACM0 is local.
-# Uses 'python3 -m esptool' (esptool v4+/v5+) with modern hyphenated flags.
+# Uses PlatformIO-managed esptool.py (~/.platformio/packages/tool-esptoolpy/esptool.py).
 #
 # Production flash path: native USB CDC on /dev/ttyACM0 only.
 # Do NOT flash through CH340 /dev/ttyUSB0 — that port is for debug output only.
@@ -74,22 +74,29 @@ if sudo fuser "${PORT}" 2>/dev/null; then
     exit 1
 fi
 
+ESPTOOL="${HOME}/.platformio/packages/tool-esptoolpy/esptool.py"
+if [ ! -f "${ESPTOOL}" ]; then
+    echo "ERROR: PlatformIO-managed esptool not found at ${ESPTOOL}." >&2
+    echo "       Run 'pio run' in firmware/esp32/ first to install required PlatformIO packages." >&2
+    exit 1
+fi
+
 echo "Flashing ESP32-S3 on ${PORT} ..."
 echo "  bootloader : 0x0000  ${BUILD_DIR}/bootloader.bin"
 echo "  partitions : 0x8000  ${BUILD_DIR}/partitions.bin"
 echo "  otadata    : 0xe000  ${BOOT_APP0}"
 echo "  app0       : 0x10000 ${BUILD_DIR}/firmware.bin"
 
-python3 -m esptool \
+python3 "${ESPTOOL}" \
     --chip esp32s3 \
     --port "${PORT}" \
     --baud 921600 \
-    --before default-reset \
-    --after hard-reset \
-    write-flash \
-    --flash-mode dio \
-    --flash-freq 80m \
-    --flash-size detect \
+    --before default_reset \
+    --after hard_reset \
+    write_flash \
+    --flash_mode dio \
+    --flash_freq 80m \
+    --flash_size detect \
     0x0     "${BUILD_DIR}/bootloader.bin" \
     0x8000  "${BUILD_DIR}/partitions.bin" \
     0xe000  "${BOOT_APP0}" \
