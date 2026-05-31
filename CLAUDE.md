@@ -19,7 +19,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean standalone bui
 | 0 — Hardware & Environment | Complete |
 | 1 — ESP32 Firmware | **Functional baseline complete** — P-only drive, encoders, IMU, and reconnect validated; watchdog reduction to 500 ms remains an open safety improvement |
 | 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, `base_footprint` root added |
-| 3 — Sensor Bridge & EKF | **In progress** — EKF live; LiDAR `/scan` verified; `/odom` rate investigation pending |
+| 3 — Sensor Bridge & EKF | **In progress** — drivetrain/safety checks passed; EKF /odom rate issue open |
 | 4 — SLAM | Not started |
 | 5 — Nav2 (MVP milestone) | Not started |
 | 6–7 — Extended sensors, Semantic perception | Not started |
@@ -86,14 +86,14 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **Drive base:** P-only control validated; straight drive confirmed at 0.10 m/s. KI introduction is next Phase 3 task.
 - **Encoder signal path:** Fixed (bad breadboard section identified and corrected). PCNT + `setFilter(400)` validated under motor load. EMA disabled (`VEL_ALPHA = 1.0`) — do not reintroduce EMA; it causes KD phase lag.
 - **Encoder CPR:** Unresolved. Firmware uses `990`; historical docs say `1010`. Re-run 10-revolution direct count test (3 trials per wheel) after corrected wiring before standardizing either value.
-- **Battery monitoring:** Pi-side INA219 is authoritative. Must be configured `RANGE_32V` + `GAIN_8_320MV` — default gain causes 32.76V / NaN. Fix committed 2026-05-30; verify reading ~9.9–12.6V before trusting low-voltage cutoff.
+- **Battery monitoring:** Pi-side INA219 is authoritative. Must be configured `RANGE_32V` + `GAIN_8_320MV` — default gain causes 32.76V / NaN. Fix committed 2026-05-30; verify reading ~9.9–12.6V before trusting low-voltage cutoff. **Verified 2026-05-31** — RANGE_32V + GAIN_8_320MV confirmed in source; voltage readings 12.0–12.3 V across session, consistent with 3S LiPo; INA219 measures logic-rail current only (EP-0225 branch), not motor current — motor current flows through the separate 10A fuse path and is not visible to the INA219.
 - **IMU under motor load:** BNO055 `angular_velocity.z` is vibration-contaminated (validated: mean +0.113 rad/s, spikes to ±11.3 rad/s during straight drive). EKF `imu0_config[11]` (vyaw) is **disabled**. Do not use IMU yaw to tune motors or drive EKF yaw fusion. Re-enable only after mechanical isolation and re-validation.
-- **EKF `/odom` rate:** Configured 20 Hz; currently observed ~55 Hz externally after time-sync. Root cause under investigation — do not assume 20 Hz is correct until resolved.
+- **EKF `/odom` rate:** Configured 20 Hz; observed ~8 Hz externally (root cause identified: robot_localization suppresses publish when `getLastMeasurementTime()` has not advanced past `last_published_stamp_`; probable cause is ESP32 timestamp offset queuing measurements; under investigation — do not assume 20 Hz is correct until resolved).
 - **Time sync:** ESP32 must call `rmw_uros_sync_session()` before stamping odom/IMU messages with epoch time.
 - **micro-ROS reconnect:** Fully automatic. Pings agent every 2s; 3 failures → motors stop → entities destroyed → retry every 1s. Recovery ≤7s with no physical RESET required.
 - **QoS:** `/diff_cont/odom` and `/imu/imu` publishers are RELIABLE (micro-ROS fragmentation requirement — Odometry is ~712 bytes, exceeds 512-byte XRCE MTU). Subscribers must use RELIABLE. SENSOR_QOS (BEST_EFFORT) silently drops these messages.
 - **PWM frequency:** 1 kHz validated on this chassis. 20 kHz caused 10× measured speed loss. Do not change without hardware re-validation.
-- **Watchdog:** Source changed to `WATCHDOG_MS = 500` ms. **Pending flash and stop-time validation** — do not assume the robot stops within 500 ms until the 500 ms firmware is flashed and stop-time is verified (criterion: motors stop ≤0.6 s after command loss).
+- **Watchdog:** Source changed to `WATCHDOG_MS = 500` ms. **Validated 2026-05-31** — firmware flashed; measured stop time 0.538 s after command loss (criterion ≤ 0.600 s, PASSED).
 - **CH340 (`/dev/ttyUSB0`):** Debug console only at 115200 baud. Not battery telemetry or display data. Display daemon reads the Pi-side INA219 directly over I2C.
 - **LiDAR `/scan`:** Verified publishing on the RPLidar A1 M8. Software motor shutdown via DTR/RTS toggling was tested and failed on this adapter — the motor does not respond to serial control signals. Physical motor-off requires future switched USB power hardware; do not attempt software motor control on this device.
 
@@ -103,11 +103,12 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 
 | Item | Status |
 |---|---|
-| Encoder CPR recount | **Blocked** — 10-rev direct count test not yet run post-wiring-fix |
-| Watchdog 500 ms | **Pending flash** — source changed to 500 ms; requires flash + stop-time validation (≤0.6 s criterion) |
-| INA219 reading verification | **Pending** — fix committed 2026-05-30; confirm reading ~9.9–12.6V under load |
+| Encoder CPR recount | **Deferred** — CH340 debug-output failure unresolved (cause unknown); Left Trial 1 = 987.0 CPR (direct count); bag-derived odom method rejected as circular; do not update firmware CPR constants until direct-count path is restored |
+| Watchdog 500 ms | **Validated 2026-05-31** — 0.538 s stop after command loss; criterion ≤ 0.600 s PASSED |
+| INA219 reading verification | **Verified 2026-05-31** — voltage-based cutoff confirmed; current reading is logic rail only, not motor current |
+| PID velocity gate (≤ ±10% error) | **Passed 2026-05-31** — steady-state error −0.9% at 0.10 m/s (P-only, KP=0.25); distance error −2.7%; encoder yaw drift −0.015 rad/s mean |
+| EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~8 Hz (not ~55 Hz as previously noted); root cause mechanism identified in robot_localization source; timestamp offset hypothesis to be tested |
 | LiDAR on `/scan` | **Verified** — publishing confirmed; software motor-off via DTR/RTS failed on this adapter; physical cutoff requires switched USB power (future hardware) |
-| EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~55 Hz externally after time-sync |
 | Sensor physical offsets in URDF | **Pending** — current positions are placeholders; measure before Phase 4 SLAM-quality validation; do not block Phase 3 service/rate validation |
 
 ---
