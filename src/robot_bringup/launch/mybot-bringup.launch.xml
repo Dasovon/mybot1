@@ -1,0 +1,17 @@
+<launch>
+  <!-- Phase 3 bringup: robot_state_publisher + EKF + LiDAR
+       Requires: microros-agent.service running (ESP32 publishing
+                 /diff_cont/odom + /imu/imu + /battery_state)
+       Produces: /tf, /odom (20 Hz), /scan (~5.5 Hz) -->
+
+  <!-- URDF → robot_state_publisher + joint_state_publisher
+       Publishes: /robot_description, static sensor TF frames -->
+  <include file="$(find-pkg-share robot_description)/launch/description.launch.py"/>
+
+  <!-- robot_localization EKF: /diff_cont/odom + /imu/imu → /odom at 20 Hz
+       IMU vyaw disabled (BNO055 vibration contamination — see ekf.yaml) -->
+  <include file="$(find-pkg-share robot_bringup)/launch/ekf.launch.xml"/>
+
+  <!-- RPLidar A1: /scan at ~5.5 Hz, frame_id=laser -->
+  <include file="$(find-pkg-share robot_bringup)/launch/lidar.launch.xml"/>
+</launch>
