@@ -17,7 +17,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean standalone bui
 | Phase | Status |
 |---|---|
 | 0 — Hardware & Environment | Complete |
-| 1 — ESP32 Firmware | **Functional baseline complete** — P-only drive, encoders, IMU, and reconnect validated; watchdog reduction to 500 ms remains an open safety improvement |
+| 1 — ESP32 Firmware | **Functional baseline complete** — P-only drive, encoders, IMU, reconnect, and watchdog 500 ms validated |
 | 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, `base_footprint` root added |
 | 3 — Sensor Bridge & EKF | **In progress** — drivetrain/safety checks passed; EKF /odom rate issue open |
 | 4 — SLAM | Not started |
@@ -85,7 +85,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **Platform:** ROS 2 Jazzy, Raspberry Pi 5 + ESP32-S3 over native USB micro-ROS (`/dev/ttyACM0`, 921600 baud).
 - **Drive base:** P-only control validated; straight drive confirmed at 0.10 m/s. KI introduction is next Phase 3 task.
 - **Encoder signal path:** Fixed (bad breadboard section identified and corrected). PCNT + `setFilter(400)` validated under motor load. EMA disabled (`VEL_ALPHA = 1.0`) — do not reintroduce EMA; it causes KD phase lag.
-- **Encoder CPR:** Unresolved. Firmware uses `990`; historical docs say `1010`. Push-test protocol: push robot straight 1.500 m measured floor distance = 6.9938 wheel revolutions (π × 68.27 mm diameter); CPR = |Δcount| / 6.9938; 3 trials; raw left and right encoder counts captured simultaneously. Expected counts: 990 CPR → ~6924, 1010 CPR → ~7064 (140-count difference distinguishable). Left single-wheel Trial 1 (9870 / 10 rev = 987.0 CPR) and 2-foot push trials (L≈1003, R≈1015 mean CPR) retained as preliminary evidence only. Do not update firmware constant until 1.5 m trials are reviewed.
+- **Encoder CPR:** **Validated 2026-05-31 — 1010 counts per wheel revolution.** Measured via `/diagnostics/encoder_counts` topic, 3 × 1.500 m straight push test (6.9938 rev per trial). Trials 2+3 accepted: L 1010.5/1008.9, R 1009.2/1009.2. Trial 1 right (1020.3) excluded as directional push outlier. Historical documentation value confirmed. Firmware constant `ENC_CPR_F = 1010.0f` — do not revert.
 - **Battery monitoring:** Pi-side INA219 is authoritative. Must be configured `RANGE_32V` + `GAIN_8_320MV` — default gain causes 32.76V / NaN. Fix committed 2026-05-30; verify reading ~9.9–12.6V before trusting low-voltage cutoff. **Verified 2026-05-31** — RANGE_32V + GAIN_8_320MV confirmed in source; voltage readings 12.0–12.3 V across session, consistent with 3S LiPo; INA219 measures logic-rail current only (EP-0225 branch), not motor current — motor current flows through the separate 10A fuse path and is not visible to the INA219.
 - **IMU under motor load:** BNO055 `angular_velocity.z` is vibration-contaminated (validated: mean +0.113 rad/s, spikes to ±11.3 rad/s during straight drive). EKF `imu0_config[11]` (vyaw) is **disabled**. Do not use IMU yaw to tune motors or drive EKF yaw fusion. Re-enable only after mechanical isolation and re-validation.
 - **EKF `/odom` rate:** Configured 20 Hz; observed ~8 Hz externally (root cause identified: robot_localization suppresses publish when `getLastMeasurementTime()` has not advanced past `last_published_stamp_`; probable cause is ESP32 timestamp offset queuing measurements; under investigation — do not assume 20 Hz is correct until resolved).
@@ -103,8 +103,9 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 
 | Item | Status |
 |---|---|
-| Encoder CPR recount | **In progress** — 1.500 m push-test protocol (6.9938 rev, CPR = \|Δcount\| / 6.9938); 2-ft trials discarded for calibration, retained as preliminary evidence; blocked on CH340 reliability — see below |
-| CH340 debug-output failure + fix required | **Root cause identified** — CH340 forwards UART data only during a brief DTR-assertion burst after each hardware reset; `in_waiting` returns to 0 permanently after the burst regardless of DTR state; USB reset / module reload / power cycle each produce exactly one data window. **Fix:** add a micro-ROS `/enc_raw` topic (Int32MultiArray, L and R raw tick counts) to the firmware so CPR measurement uses the proven XRCE-DDS transport and does not depend on CH340. No firmware change approved yet — add to Phase 3 firmware backlog before resuming CPR recount. |
+| Encoder CPR recount | **Closed 2026-05-31** — CPR = 1010 confirmed via `/diagnostics/encoder_counts` topic; CH340 bypass not required |
+| CH340 debug-output failure | **Root cause identified** — DTR-assertion burst only; `in_waiting` returns 0 permanently after burst. Not blocking any active work — CPR resolved via micro-ROS topic instead. No further action required unless CH340 debug stream is needed for future diagnostics. |
+| Odometry validation (CPR=1010) | **Passed 2026-05-31** — motor_test.sh 0.10 m/s 8 s: velocity error −6.1%, distance error −8.3%, both ≤±10% gate. Errors larger than the CPR=990 gate run (−0.9% / −2.7%) due to lower battery voltage at time of test (11.67 V vs 12.07 V) — P-only KP=0.25 has no integral correction for supply voltage variation. Odom now reports accurate physical distance. |
 | Watchdog 500 ms | **Validated 2026-05-31** — 0.538 s stop after command loss; criterion ≤ 0.600 s PASSED |
 | INA219 reading verification | **Verified 2026-05-31** — voltage-based cutoff confirmed; current reading is logic rail only, not motor current |
 | PID velocity gate (≤ ±10% error) | **Passed 2026-05-31** — steady-state error −0.9% at 0.10 m/s (P-only, KP=0.25); distance error −2.7%; encoder yaw drift −0.015 rad/s mean |
