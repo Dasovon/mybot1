@@ -45,7 +45,7 @@ GPIOs to avoid: 4,5,6,7 (not broken out), 25,26,27,32,33 (not broken out), 35/36
 
 | Constant | Status | Notes |
 |---|---|---|
-| `ENC_CPR` | **Pending re-validation** | Firmware uses `990`; historical docs say `1010`. Protocol: 5 rev/trial × 3 trials/wheel, raw count only, CPR = |Δcount| / 5. Left Trial 1 = 987.0 CPR (9870 / 10 rev, valid and comparable). Do not update until all 6 trials reviewed. |
+| `ENC_CPR` | **Pending re-validation** | Firmware uses `990`; historical docs say `1010`. Protocol: push straight 1.500 m = 6.9938 rev, CPR = |Δcount| / 6.9938; 3 trials; L and R simultaneously. Expected: 990→6924 counts, 1010→7064 counts (140-count gap). 2-ft trials (L≈1003, R≈1015 mean) and single-wheel Trial 1 (L=987.0) retained as preliminary evidence. Do not update until 1.5 m trials reviewed. |
 | `wheel_radius` | `0.03414 m` | Measured: 68.27 mm diameter |
 | `wheel_separation` | `0.177 m` | Measured center-to-center |
 
