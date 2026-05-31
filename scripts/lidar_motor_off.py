@@ -33,9 +33,10 @@ def main():
         sys.exit(1)
 
     s.dtr = False
-    print(f"[lidar-motor-off] holding {PORT} DTR=False — motor stopped", flush=True)
+    s.rts = False
 
     def shutdown(sig, frame):
+        print("[lidar-motor-off] releasing port", flush=True)
         s.close()
         sys.exit(0)
 
@@ -43,7 +44,12 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
 
     while True:
-        s.dtr = False  # reassert each second — resilient against unexpected state changes
+        s.dtr = False
+        s.rts = False
+        print(
+            f"[lidar-motor-off] DTR={s.dtr} RTS={s.rts} — verify motor state physically",
+            flush=True,
+        )
         time.sleep(1)
 
 
