@@ -475,6 +475,13 @@ This pattern applies to: `esp32_serial_bridge` (serial parsing + unit conversion
 - **~200 ms gaps on `/diff_cont/odom` and `/imu/imu` are telemetry-only — they do not indicate control-loop stalls.** Validated 2026-05-30: CH340 timing test ran 35 s with zero `[WARN] control dt > 15 ms` events. The 100 Hz PID loop runs clean throughout. The gap is in the micro-ROS 30 Hz publish path (executor/USB CDC), not in motor control. Root cause of worst-case gaps: zombie `ros2 bag record` processes creating DDS congestion — always kill stale bag processes before testing (`pkill -f 'ros2 bag record'`). Residual ~200 ms gap with clean graph is a known micro-ROS/USB CDC timing artifact; it does not affect closed-loop control quality.
 - **Control loop timing guard (permanent):** firmware fires `Serial0.printf("[WARN] control dt %.2f ms\n", dt_ms)` on CH340 (`/dev/ttyUSB0`, 115200 baud) if any 100 Hz loop iteration exceeds 15 ms. Zero warnings = loop is healthy. This check costs nothing at runtime and gives instant proof of stalls if they ever appear.
 
+### IMU — BNO055 Under Motor Load
+- **BNO055 angular_velocity.z is unreliable under motor load until mechanically isolated.** Validated 2026-05-30: gyro z mean=+0.113 rad/s, 111 spikes > 1 rad/s (peak ±11.3 rad/s) during straight drive. Encoder odom showed mean=+0.0001 rad/s on the same run — drive base is straight, IMU is contaminated by gearbox vibration.
+- **EKF vyaw from IMU is disabled** (`imu0_config[11] = false` in `ekf.yaml`). EKF uses encoder odom exclusively for yaw. Re-enable only after foam/rubber isolation and re-validation (target: mean < 0.05 rad/s, spikes < 10 in 8 s).
+- **Do not tune motors or PID from IMU yaw or IMU jerk** while IMU is unshielded. Use encoder odom only.
+- IMU linear_acceleration.x jerk (2.49 m/s² peak-to-peak) is also vibration — not a PID oscillation issue.
+- See: `docs/testing/imu_vibration_validation_2026-05-30.md`
+
 ### SLAM / Costmaps
 - LiDAR is mounted low — detects chair legs and shoes as walls. Mitigate with RealSense depth validation and layered costmaps.
 - Nav2 costmap layers: Static (SLAM map) → Obstacle (LiDAR) → Voxel (RealSense) → Semantic (YOLO, future).
