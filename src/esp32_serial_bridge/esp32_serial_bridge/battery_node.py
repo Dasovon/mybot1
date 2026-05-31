@@ -1,25 +1,28 @@
-import os
+"""Pi-side INA219 battery publisher with low-voltage cutoff for mybot1."""
 import subprocess
 import threading
 import time
 
+from esp32_serial_bridge.battery_guard import BatteryGuard
+from geometry_msgs.msg import Twist
+from ina219 import INA219
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from rclpy.qos import DurabilityPolicy
+from rclpy.qos import HistoryPolicy
+from rclpy.qos import QoSProfile
+from rclpy.qos import ReliabilityPolicy
 from sensor_msgs.msg import BatteryState
-from geometry_msgs.msg import Twist
 
-from ina219 import INA219
-
-BAT_FULL_V       = 12.6   # 3S LiPo: 4.2 V/cell
-BAT_CUTOFF_V     = 9.9    # 3S LiPo: 3.3 V/cell — enter cutoff below this
-BAT_RECOVER_V    = 10.2   # hysteresis: exit cutoff above this (0.3 V band)
-SHUNT_OHMS       = 0.1    # on-board R100 shunt
-MAX_EXPECTED_A   = 3.0    # logic rail max: Pi5 ~2.5A + ESP32 + sensors at 12V
-I2C_BUS          = 1      # Pi I2C-1 (GPIO 2/3)
-PUBLISH_HZ       = 1.0
-CUTOFF_HZ        = 40.0   # zero-cmd_vel publish rate during cutoff
-SHUTDOWN_AFTER_S = 30     # seconds below cutoff before OS shutdown to protect battery
+BAT_FULL_V = 12.6    # 3S LiPo: 4.2 V/cell
+BAT_CUTOFF_V = 9.9   # 3S LiPo: 3.3 V/cell — enter cutoff below this
+BAT_RECOVER_V = 10.2  # hysteresis: exit cutoff above this (0.3 V band)
+SHUNT_OHMS = 0.1     # on-board R100 shunt
+MAX_EXPECTED_A = 3.0  # logic rail max: Pi5 ~2.5A + ESP32 + sensors at 12V
+I2C_BUS = 1          # Pi I2C-1 (GPIO 2/3)
+PUBLISH_HZ = 1.0
+CUTOFF_HZ = 40.0     # zero-cmd_vel publish rate during cutoff
+SHUTDOWN_AFTER_S = 30  # seconds below cutoff before OS shutdown to protect battery
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +88,7 @@ class INA219Reader:
 
 
 class BatteryPublisherNode(Node):
+
     def __init__(self):
         super().__init__('battery_publisher')
 
@@ -104,8 +108,10 @@ class BatteryPublisherNode(Node):
         self._pub = self.create_publisher(BatteryState, '/battery_state', qos)
         self._cmd_pub = self.create_publisher(Twist, '/diff_cont/cmd_vel_unstamped', cmd_qos)
         self._reader = INA219Reader()
-
-        self._in_cutoff = False
+        self._guard = BatteryGuard(
+            cutoff_voltage=BAT_CUTOFF_V,
+            recovery_voltage=BAT_RECOVER_V,
+        )
         self._cutoff_since = None  # monotonic time when cutoff began
 
         self.create_timer(1.0 / PUBLISH_HZ, self._publish_battery)
@@ -137,24 +143,21 @@ class BatteryPublisherNode(Node):
         self._update_cutoff_state(voltage, fresh)
 
     def _update_cutoff_state(self, voltage: float, fresh: bool):
-        if not fresh or voltage <= 0.0:
-            return
+        decision = self._guard.update(voltage, fresh)
 
-        if not self._in_cutoff and voltage < BAT_CUTOFF_V:
-            self._in_cutoff = True
+        if decision.entered_cutoff:
             self._cutoff_since = time.monotonic()
             self.get_logger().error(
                 f'BATTERY CRITICAL: {voltage:.2f} V < {BAT_CUTOFF_V} V — '
                 f'publishing zero cmd_vel at {CUTOFF_HZ:.0f} Hz. '
                 f'Shutdown in {SHUTDOWN_AFTER_S}s if voltage does not recover.')
 
-        elif self._in_cutoff and voltage >= BAT_RECOVER_V:
-            self._in_cutoff = False
+        elif decision.recovered:
             self._cutoff_since = None
             self.get_logger().warn(
                 f'Battery recovered to {voltage:.2f} V — resuming normal operation.')
 
-        if self._in_cutoff:
+        if decision.in_cutoff and self._cutoff_since is not None:
             elapsed = time.monotonic() - self._cutoff_since
             self.get_logger().error(
                 f'Battery cutoff active: {voltage:.2f} V  ({elapsed:.0f}s)',
@@ -166,9 +169,8 @@ class BatteryPublisherNode(Node):
                 subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])
 
     def _cutoff_tick(self):
-        """Publishes zero velocity at CUTOFF_HZ while in cutoff state.
-        Runs every tick regardless; no-op when not in cutoff — cheap timer."""
-        if not self._in_cutoff:
+        """Publish zero velocity at cutoff rate; no-op when not in cutoff."""
+        if not self._guard.in_cutoff:
             return
         self._cmd_pub.publish(Twist())
 
