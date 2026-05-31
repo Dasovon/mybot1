@@ -1,0 +1,16 @@
+[Unit]
+Description=mybot1 Phase 3 bringup — robot_state_publisher + EKF + LiDAR
+After=network.target microros-agent.service
+Wants=microros-agent.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/tmp
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && source /home/ubuntu/bot_ws/install/setup.bash && ros2 launch robot_bringup mybot-bringup.launch.xml"
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

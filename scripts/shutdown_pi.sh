@@ -15,8 +15,12 @@ ssh "${PI}" bash -s <<'REMOTE'
 # Kill any active bag recordings first
 pkill -f "ros2 bag record" 2>/dev/null && echo "  killed zombie bag processes" || true
 
-# Stop services in dependency order (display depends on ROS, agent holds the serial port)
-for svc in mybot-display.service robot-launch.service microros-agent.service; do
+# Stop services in dependency order:
+#   display → health (depend on ROS/battery)
+#   robot-launch (EKF/LiDAR/RSP)
+#   mybot-battery (owns battery cutoff logic — stop before agent)
+#   microros-agent (holds /dev/ttyACM0 — must be last)
+for svc in mybot-display.service mybot-health.service robot-launch.service mybot-battery.service microros-agent.service; do
     if systemctl is-active --quiet "$svc"; then
         sudo systemctl stop "$svc"
         echo "  stopped $svc"
