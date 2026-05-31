@@ -212,11 +212,24 @@ void microros_spin() {
                 if (rmw_uros_ping_agent(500, 3) == RMW_RET_OK) {
                     Serial0.printf("[uROS] agent found, creating entities t=%lums\n", (unsigned long)now);
                     if (create_entities()) {
+                        // Sync ESP32 clock to Pi wall clock so odom/IMU headers carry
+                        // Unix epoch time, not boot uptime. Without this, Pi TF uses
+                        // wall clock while ESP32 stamps use uptime (~527 s), causing
+                        // TF_OLD_DATA rejections and EKF measurement drops.
+                        if (rmw_uros_sync_session(1000) != RMW_RET_OK) {
+                            Serial0.printf("[uROS] time sync FAILED, destroying t=%lums\n",
+                                           (unsigned long)now);
+                            destroy_entities();
+                            // Stay in WAITING_AGENT — last_ping_ms already updated
+                            break;
+                        }
+                        int64_t epoch_ms = rmw_uros_epoch_millis();
+                        Serial0.printf("[uROS] CONNECTED + TIME_SYNCED epoch_ms=%lld local_ms=%lu\n",
+                                       (long long)epoch_ms, (unsigned long)millis());
                         last_pub_ok_ms  = now;
                         last_ping_ms    = now;
                         ping_fail_count = 0;
                         state = AGENT_CONNECTED;
-                        Serial0.printf("[uROS] CONNECTED t=%lums\n", (unsigned long)now);
                     } else {
                         Serial0.printf("[uROS] create_entities FAILED, retrying t=%lums\n", (unsigned long)now);
                     }
@@ -276,9 +289,9 @@ void microros_publish_odom(float x, float y, float theta,
                            float vel_linear, float vel_angular) {
     if (state != AGENT_CONNECTED) return;
 
-    uint32_t ms = millis();
-    odom_msg.header.stamp.sec     = ms / 1000;
-    odom_msg.header.stamp.nanosec = (ms % 1000) * 1000000UL;
+    int64_t epoch_ns = rmw_uros_epoch_nanos();
+    odom_msg.header.stamp.sec     = static_cast<int32_t>(epoch_ns / 1000000000LL);
+    odom_msg.header.stamp.nanosec = static_cast<uint32_t>(epoch_ns % 1000000000LL);
 
     odom_msg.pose.pose.position.x    = x;
     odom_msg.pose.pose.position.y    = y;
@@ -300,9 +313,9 @@ void microros_publish_imu(float ax, float ay, float az,
                           float gx, float gy, float gz) {
     if (state != AGENT_CONNECTED) return;
 
-    uint32_t ms = millis();
-    imu_msg.header.stamp.sec     = ms / 1000;
-    imu_msg.header.stamp.nanosec = (ms % 1000) * 1000000UL;
+    int64_t epoch_ns = rmw_uros_epoch_nanos();
+    imu_msg.header.stamp.sec     = static_cast<int32_t>(epoch_ns / 1000000000LL);
+    imu_msg.header.stamp.nanosec = static_cast<uint32_t>(epoch_ns % 1000000000LL);
 
     imu_msg.linear_acceleration.x = ax;
     imu_msg.linear_acceleration.y = ay;
