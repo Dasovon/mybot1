@@ -19,7 +19,7 @@ A distributed ROS 2 Jazzy autonomous mobile robot (AMR) — clean standalone bui
 | 0 — Hardware & Environment | Complete |
 | 1 — ESP32 Firmware | **Functional baseline complete** — P-only drive, encoders, IMU, and reconnect validated; watchdog reduction to 500 ms remains an open safety improvement |
 | 2 — ROS 2 Foundation (URDF + TF) | **Complete** — 9 frames, all named correctly, `base_footprint` root added |
-| 3 — Sensor Bridge & EKF | **In progress** — EKF live; LiDAR and `/odom` rate investigation pending |
+| 3 — Sensor Bridge & EKF | **In progress** — EKF live; LiDAR `/scan` verified; `/odom` rate investigation pending |
 | 4 — SLAM | Not started |
 | 5 — Nav2 (MVP milestone) | Not started |
 | 6–7 — Extended sensors, Semantic perception | Not started |
@@ -33,7 +33,7 @@ Phase 3 gate requires: LiDAR verified on `/scan`; EKF `/odom` publishing smoothl
 | Layer | Hardware | Key Responsibilities |
 |---|---|---|
 | Embedded controller | ESP32-S3-DevKitC-1 (Lonely Binary expansion) | PID motor control, encoder counting, IMU, cmd_vel watchdog, micro-ROS publisher |
-| Sensor bridge | Raspberry Pi 5 | micro-ROS agent, INA219 battery monitor, LiDAR driver, RealSense driver, EKF, light Nav2 nodes |
+| Sensor bridge | Raspberry Pi 5 | micro-ROS agent, INA219 battery monitor, LiDAR driver, RealSense driver, EKF |
 | High-level compute | Development PC (Ubuntu 24.04) | SLAM Toolbox, Nav2, RViz2, YOLO, rosbag, AI nodes |
 
 ---
@@ -95,6 +95,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 - **PWM frequency:** 1 kHz validated on this chassis. 20 kHz caused 10× measured speed loss. Do not change without hardware re-validation.
 - **Watchdog:** Source changed to `WATCHDOG_MS = 500` ms. **Pending flash and stop-time validation** — do not assume the robot stops within 500 ms until the 500 ms firmware is flashed and stop-time is verified (criterion: motors stop ≤0.6 s after command loss).
 - **CH340 (`/dev/ttyUSB0`):** Debug console only at 115200 baud. Not battery telemetry or display data. Display daemon reads the Pi-side INA219 directly over I2C.
+- **LiDAR `/scan`:** Verified publishing on the RPLidar A1 M8. Software motor shutdown via DTR/RTS toggling was tested and failed on this adapter — the motor does not respond to serial control signals. Physical motor-off requires future switched USB power hardware; do not attempt software motor control on this device.
 
 ---
 
@@ -105,7 +106,7 @@ Truths established by hardware testing. Do not revert without a hardware re-vali
 | Encoder CPR recount | **Blocked** — 10-rev direct count test not yet run post-wiring-fix |
 | Watchdog 500 ms | **Pending flash** — source changed to 500 ms; requires flash + stop-time validation (≤0.6 s criterion) |
 | INA219 reading verification | **Pending** — fix committed 2026-05-30; confirm reading ~9.9–12.6V under load |
-| LiDAR on `/scan` | **Pending** — Phase 3 gate; not yet verified |
+| LiDAR on `/scan` | **Verified** — publishing confirmed; software motor-off via DTR/RTS failed on this adapter; physical cutoff requires switched USB power (future hardware) |
 | EKF `/odom` rate anomaly | **Under investigation** — configured 20 Hz; observed ~55 Hz externally after time-sync |
 | Sensor physical offsets in URDF | **Pending** — current positions are placeholders; measure before Phase 4 SLAM-quality validation; do not block Phase 3 service/rate validation |
 
