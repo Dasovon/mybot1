@@ -1,0 +1,16 @@
+[Unit]
+Description=RPLidar A1 motor off — holds DTR=False to stop motor when LiDAR ROS node is not running
+After=network.target
+Conflicts=mybot-lidar.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/tmp
+ExecStart=/usr/bin/python3 /home/ubuntu/bot_ws/scripts/lidar_motor_off.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

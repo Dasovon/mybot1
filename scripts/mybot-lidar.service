@@ -2,6 +2,7 @@
 Description=MyBot RPLidar A1 ROS 2 Driver
 After=robot-launch.service
 Requires=robot-launch.service
+Conflicts=mybot-lidar-motor-off.service
 
 [Service]
 Type=simple
@@ -9,6 +10,7 @@ User=ubuntu
 WorkingDirectory=/tmp
 Environment=ROS_DOMAIN_ID=0
 ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /home/ubuntu/bot_ws/install/setup.bash && ros2 launch robot_bringup lidar.launch.xml'
+ExecStopPost=+/bin/systemctl start mybot-lidar-motor-off.service
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15
