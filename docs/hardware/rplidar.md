@@ -76,9 +76,15 @@ ros2 topic hz /scan                       # expect ~5.5 Hz
 ros2 topic echo /scan --once | head -30   # ranges must be non-zero, non-inf
 ```
 
-### Motor enable
+### Motor control — known limitation
 
-The LiDAR motor is enabled by the `rplidar_ros` node via the USB adapter's DTR line. **The motor only spins while the node is running.** If the motor stops, the laser also stops — power-cycle the LiDAR and restart the node.
+The `rplidar_ros` node controls the motor via the CP2102 USB adapter's DTR line. However, when the node exits and releases `/dev/rplidar`, the CP2102 may retain the last DTR state, leaving the motor running with no ROS process active.
+
+**Tested on this build (2026-05-31):** All four DTR/RTS combinations were applied via pyserial while the port was held open. The motor did not change state in any combination. This indicates that either the DTR/RTS lines are not routed to MOTOCTL on this adapter revision, or the motor is powered continuously from USB 5V independent of the control line.
+
+**Current status:** Stopping `mybot-lidar.service` halts `/scan` publishing and the ROS driver, but does not guarantee the physical motor stops. Unplugging the LiDAR USB cable is the reliable way to stop the motor during bench work.
+
+**Long-term fix (not yet implemented):** A switched USB power path (load switch or USB hub with per-port power switching via `uhubctl`) controlled by a Pi GPIO would allow software-controlled motor power-off.
 
 ---
 
