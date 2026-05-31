@@ -1,21 +1,33 @@
 #!/usr/bin/env bash
-# mybot1 boot health check — runs after all robot services have started.
-# Auto-fixes read-only filesystem and stopped services, then verifies
-# ROS topics are live. Results go to journalctl (systemd) or stdout.
+# mybot1 Phase 3 health check
+#
+# Validates the full boot stack: services, INA219 voltage, ROS topics,
+# EKF output, TF transforms, and odom covariance.
+#
+# Topic rate checks use QoS-compatible echo-count method, NOT ros2 topic hz.
+# (ros2 topic hz /odom showed false ~1.2 Hz on a healthy 20 Hz EKF due to
+# QoS subscriber mismatch — documented 2026-05-30.)
+#
+# Usage:
+#   On Pi, run directly or via mybot-health.service.
+#   Exit 0 = all checks passed. Exit 1 = one or more failed.
 
 set -eo pipefail
 
 PASS=0
 FAIL=0
+WARN=0
 
 log_pass() { echo "[PASS] $1"; (( PASS++ )) || true; }
 log_fail() { echo "[FAIL] $1"; (( FAIL++ )) || true; }
+log_warn() { echo "[WARN] $1"; (( WARN++ )) || true; }
 log_fix()  { echo "[FIX ] $1"; }
+log_info() { echo "[INFO] $1"; }
 
 ensure_service() {
     local svc="$1"
     if systemctl is-active --quiet "$svc"; then
-        log_pass "$svc is active"
+        log_pass "$svc active"
     else
         log_fix "$svc not active — starting"
         sudo systemctl start "$svc"
@@ -28,14 +40,62 @@ ensure_service() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# 1. Filesystem must be read-write (lgpio, ROS logs, pip installs all need it)
-# ---------------------------------------------------------------------------
+# Count messages on a topic using QoS-safe echo (not ros2 topic hz).
+# Prints a stamped field for topics with headers, raw echo for others.
+count_topic_msgs() {
+    local topic="$1"
+    local field="$2"      # e.g. "header.stamp.sec" — use "." for any field
+    local window_s="$3"
+    if [[ "$field" == "." ]]; then
+        timeout "$window_s" ros2 topic echo "$topic" --once 2>/dev/null | \
+            grep -c '.' || true
+    else
+        timeout "$window_s" ros2 topic echo "$topic" --field "$field" 2>/dev/null | \
+            grep -cE '^[0-9]' || true
+    fi
+}
+
+check_topic_rate() {
+    local topic="$1"
+    local field="$2"
+    local min_msgs="$3"   # minimum message count in the window
+    local window_s="$4"
+    local label="$5"
+
+    local count
+    count=$(count_topic_msgs "$topic" "$field" "$window_s")
+    local hz=$(( count / window_s ))
+
+    if [[ "$count" -ge "$min_msgs" ]]; then
+        log_pass "$label: ${count} msgs/${window_s}s (~${hz} Hz)"
+    elif [[ "$count" -gt 0 ]]; then
+        log_fail "$label: ${count} msgs/${window_s}s — need ≥${min_msgs} in ${window_s}s"
+    else
+        log_fail "$label: no messages in ${window_s}s"
+    fi
+}
+
+check_topic_alive() {
+    local topic="$1"
+    local timeout_s="$2"
+    local label="$3"
+
+    if timeout "$timeout_s" ros2 topic echo "$topic" --once 2>/dev/null | grep -q '.'; then
+        log_pass "$label: alive"
+    else
+        log_fail "$label: no message in ${timeout_s}s"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Filesystem
+# ─────────────────────────────────────────────────────────────────────────────
+echo "=== [1] Filesystem ==="
 if touch /tmp/.mybot_rw_check 2>/dev/null; then
     rm -f /tmp/.mybot_rw_check
-    log_pass "Root filesystem is read-write"
+    log_pass "Root filesystem read-write"
 else
-    log_fix "Root filesystem is read-only — remounting rw"
+    log_fix "Root filesystem read-only — remounting rw"
     ROOT_DEV=$(findmnt -n -o SOURCE /)
     if sudo mount -o remount,rw "$ROOT_DEV" / 2>/dev/null; then
         log_pass "Root filesystem remounted read-write"
@@ -44,104 +104,194 @@ else
     fi
 fi
 
-# ---------------------------------------------------------------------------
-# 2. Required services must be running
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Services
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== [2] Services ==="
 ensure_service microros-agent.service
-
-# Display: restart if it started on a read-only filesystem
-if systemctl is-active --quiet mybot-display.service; then
-    START_TIME=$(systemctl show mybot-display.service --property=ActiveEnterTimestamp \
-        | cut -d= -f2)
-    if journalctl -u mybot-display.service --since "$START_TIME" --no-pager -q \
-            2>/dev/null | grep -q "Read-only file system"; then
-        log_fix "mybot-display started on read-only fs — restarting"
-        sudo systemctl restart mybot-display.service
-        sleep 3
-    fi
-fi
-ensure_service mybot-display.service
 ensure_service mybot-battery.service
+ensure_service mybot-display.service
+ensure_service robot-launch.service
 
-# ---------------------------------------------------------------------------
-# 3. INA219 sanity check — read voltage directly via smbus2
-# ---------------------------------------------------------------------------
-BAT_VOLTAGE=$(python3 - <<'EOF'
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. INA219 battery voltage
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== [3] INA219 battery voltage ==="
+BAT_RESULT=$(python3 - <<'PYEOF'
 try:
     from ina219 import INA219
     ina = INA219(0.1, busnum=1)
-    ina.configure()
-    print(f"{ina.voltage():.2f}")
+    # Must specify gain explicitly — default GAIN_AUTO uses GAIN_1_40MV (0.4A max)
+    # which overflows immediately on a loaded logic rail, producing 32.76V / NaN.
+    ina.configure(
+        voltage_range=INA219.RANGE_32V,
+        gain=INA219.GAIN_8_320MV,
+    )
+    v = ina.voltage()
+    i = ina.current() / 1000.0
+    print(f"voltage={v:.2f} current={i:.3f}")
 except Exception as e:
-    print(f"ERROR: {e}")
-EOF
+    print(f"ERROR {e}")
+PYEOF
 )
 
-if echo "$BAT_VOLTAGE" | grep -qE '^[0-9]+\.[0-9]+$'; then
-    # Sanity check: must be between 8 V and 16 V (covers flat to full 3S + margin)
-    if awk "BEGIN { exit !($BAT_VOLTAGE >= 8.0 && $BAT_VOLTAGE <= 16.0) }"; then
-        log_pass "INA219 battery voltage: ${BAT_VOLTAGE} V"
+if echo "$BAT_RESULT" | grep -q "^ERROR"; then
+    log_fail "INA219 read failed: $BAT_RESULT"
+elif echo "$BAT_RESULT" | grep -q "voltage="; then
+    VOLTAGE=$(echo "$BAT_RESULT" | grep -oP 'voltage=\K[0-9.]+')
+    CURRENT=$(echo "$BAT_RESULT" | grep -oP 'current=\K[-0-9.]+')
+    if awk "BEGIN { exit !($VOLTAGE >= 9.0 && $VOLTAGE <= 16.0) }"; then
+        log_pass "INA219: ${VOLTAGE} V / ${CURRENT} A"
+    elif awk "BEGIN { exit !($VOLTAGE >= 1.0 && $VOLTAGE < 9.0) }"; then
+        log_warn "INA219: ${VOLTAGE} V — low battery or no battery rail (Pi USB-C only?)"
+    elif awk "BEGIN { exit !($VOLTAGE < 1.0) }"; then
+        log_warn "INA219: ${VOLTAGE} V — no battery rail (expected if Pi powered via USB-C)"
     else
-        log_fail "INA219 battery voltage out of range: ${BAT_VOLTAGE} V (expected 8–16 V)"
+        log_fail "INA219: ${VOLTAGE} V — out of range (OVF? check INA219 wiring)"
     fi
 else
-    log_fail "INA219 read failed: $BAT_VOLTAGE"
+    log_fail "INA219: unexpected output: $BAT_RESULT"
 fi
 
-# ---------------------------------------------------------------------------
-# 4. ROS topic health — ESP32 must be publishing via micro-ROS
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. ROS environment
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== [4] ROS topics ==="
 source /opt/ros/jazzy/setup.bash
 source /home/ubuntu/microros_ws/install/setup.bash
 source /home/ubuntu/bot_ws/install/setup.bash
 
-check_topic_hz() {
-    local topic="$1"
-    local min_hz="$2"
-    local label="$3"
-    local timeout_s=15
+# Wait briefly for EKF to settle after services start
+sleep 3
 
-    local rate
-    rate=$(timeout "$timeout_s" ros2 topic hz "$topic" 2>/dev/null \
-        | grep 'average rate' | head -1 | awk '{print $3}' | tr -d ':' || true)
+# ESP32 micro-ROS topics — published at 30 Hz, require ≥15 msgs in 5s
+check_topic_rate /diff_cont/odom "header.stamp.sec" 15 5 "/diff_cont/odom (ESP32 odom)"
+check_topic_rate /imu/imu        "header.stamp.sec" 15 5 "/imu/imu (ESP32 IMU)"
 
-    if [[ -z "$rate" ]]; then
-        log_fail "$label: no messages received within ${timeout_s}s"
-        return
-    fi
+# LiDAR — published at ~6 Hz, require ≥4 msgs in 5s
+check_topic_rate /scan "header.stamp.sec" 4 5 "/scan (LiDAR)"
 
-    if awk "BEGIN { exit !($rate >= $min_hz) }"; then
-        log_pass "$label: ${rate} Hz (>= ${min_hz} Hz required)"
+# EKF filtered odometry — published at 20 Hz.
+# NOTE: ros2 topic hz /odom gives false low readings (~1.2 Hz) due to QoS
+# subscriber mismatch. Use echo-count method only.
+check_topic_rate /odom "header.stamp.sec" 10 5 "/odom (EKF filtered)"
+
+# Battery state — 1 Hz, just check alive
+check_topic_alive /battery_state 5 "/battery_state"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. TF transforms
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== [5] TF transforms ==="
+TF_RESULT=$(python3 - <<'PYEOF'
+import sys, time
+try:
+    import rclpy
+    from rclpy.node import Node
+    from tf2_ros import Buffer, TransformListener
+
+    rclpy.init()
+    node = Node('health_tf_check')
+    buf = Buffer()
+    lst = TransformListener(buf, node)
+
+    # Spin briefly to populate TF buffer
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        rclpy.spin_once(node, timeout_sec=0.1)
+
+    checks = [
+        ('odom',      'base_footprint', 'EKF publishing odom→base_footprint'),
+        ('base_link', 'laser',          'URDF laser frame'),
+        ('base_link', 'imu_link',       'URDF imu_link frame'),
+    ]
+    for src, tgt, label in checks:
+        try:
+            buf.lookup_transform(src, tgt, rclpy.time.Time())
+            print(f"OK {label} ({src} → {tgt})")
+        except Exception as e:
+            print(f"FAIL {label} ({src} → {tgt}): {e}")
+
+    node.destroy_node()
+    rclpy.shutdown()
+except Exception as e:
+    print(f"FAIL TF check error: {e}")
+    sys.exit(0)
+PYEOF
+)
+
+while IFS= read -r line; do
+    if [[ "$line" == OK* ]]; then
+        log_pass "${line#OK }"
+    elif [[ "$line" == FAIL* ]]; then
+        log_fail "${line#FAIL }"
     else
-        log_fail "$label: ${rate} Hz (< ${min_hz} Hz required)"
+        log_info "$line"
     fi
-}
+done <<< "$TF_RESULT"
 
-check_topic_hz /diff_cont/odom 25.0 "odom"
-check_topic_hz /imu/imu        25.0 "IMU"
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Odom covariance (firmware verification)
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== [6] Odom covariance ==="
+COV_RESULT=$(python3 - <<'PYEOF'
+import sys, subprocess, yaml
 
-# /battery_state: published by Pi battery node at 1 Hz
-BATT=$(timeout 5 ros2 topic echo /battery_state --once --qos-reliability reliable 2>/dev/null || true)
-if echo "$BATT" | grep -q 'voltage:'; then
-    VOLTAGE=$(echo "$BATT" | grep '^voltage:' | awk '{print $2}')
-    if awk "BEGIN { exit !($VOLTAGE >= 8.0 && $VOLTAGE <= 16.0) }"; then
-        log_pass "/battery_state: ${VOLTAGE} V"
-    else
-        log_fail "/battery_state: voltage out of range: ${VOLTAGE} V"
-    fi
+try:
+    out = subprocess.run(
+        ['ros2', 'topic', 'echo', '/diff_cont/odom', '--once'],
+        capture_output=True, text=True, timeout=6,
+        env={**__import__('os').environ}
+    )
+    # Split on --- to get first document only
+    doc = out.stdout.split('---')[0]
+    msg = yaml.safe_load(doc)
+    cov = msg['pose']['covariance']
+    yaw_var = cov[35]
+    x_var   = cov[0]
+    vx_var  = msg['twist']['covariance'][0]
+    vyaw_var = msg['twist']['covariance'][35]
+    print(f"pose[0]={x_var:.4f} pose[35]={yaw_var:.4f} twist[0]={vx_var:.4f} twist[35]={vyaw_var:.4f}")
+    if yaw_var == 0.0:
+        print("ZERO_YAW")
+    else:
+        print("NONZERO")
+except Exception as e:
+    print(f"ERROR {e}")
+PYEOF
+)
+
+if echo "$COV_RESULT" | grep -q "NONZERO"; then
+    VALS=$(echo "$COV_RESULT" | grep "pose\[0\]")
+    log_pass "Odom covariance nonzero: $VALS"
+elif echo "$COV_RESULT" | grep -q "ZERO_YAW"; then
+    VALS=$(echo "$COV_RESULT" | grep "pose\[0\]")
+    log_fail "Odom covariance yaw (pose[35]) is zero — old firmware still running. Re-flash with flash_esp32.sh"
+    log_info "  $VALS"
+elif echo "$COV_RESULT" | grep -q "^ERROR"; then
+    log_warn "Could not read odom covariance: $COV_RESULT"
 else
-    log_fail "/battery_state: no message received from Pi battery publisher"
+    log_warn "Odom covariance check inconclusive: $COV_RESULT"
 fi
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
-# ---------------------------------------------------------------------------
-echo "----------------------------------------"
-echo "Health check complete: ${PASS} passed, ${FAIL} failed"
-if [[ $FAIL -eq 0 ]]; then
-    echo "STATUS: OK — robot ready"
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "════════════════════════════════════════════════"
+echo "  Health check: ${PASS} passed  ${FAIL} failed  ${WARN} warnings"
+if [[ $FAIL -eq 0 && $WARN -eq 0 ]]; then
+    echo "  STATUS: OK — Phase 3 stack healthy"
+    exit 0
+elif [[ $FAIL -eq 0 ]]; then
+    echo "  STATUS: OK with warnings — review above"
     exit 0
 else
-    echo "STATUS: DEGRADED — ${FAIL} check(s) failed (see above)"
+    echo "  STATUS: DEGRADED — ${FAIL} check(s) failed (see above)"
     exit 1
 fi

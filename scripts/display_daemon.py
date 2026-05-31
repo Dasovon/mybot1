@@ -81,7 +81,12 @@ class BatteryReader:
             try:
                 if self._ina is None:
                     self._ina = INA219(0.1, busnum=1)
-                    self._ina.configure()
+                    # Must specify gain — default GAIN_AUTO uses GAIN_1_40MV (0.4A max)
+                    # which overflows on a loaded logic rail, producing 32.76V / NaN.
+                    self._ina.configure(
+                        voltage_range=INA219.RANGE_32V,
+                        gain=INA219.GAIN_8_320MV,
+                    )
                 v = self._ina.voltage()
                 self.current = self._ina.current() / 1000.0  # mA → A
                 self.voltage = v
