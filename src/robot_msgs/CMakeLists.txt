@@ -5,4 +5,9 @@ find_package(ament_cmake REQUIRED)
 
 # rosidl_generate_interfaces omitted until msg/srv/action files are added
 
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
 ament_package()
