@@ -23,7 +23,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'serial_bridge = esp32_serial_bridge.serial_bridge:main',
             'battery_publisher = esp32_serial_bridge.battery_node:main',
         ],
     },

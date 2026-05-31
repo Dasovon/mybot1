@@ -190,16 +190,19 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 921600
 ```
 map
  └── odom
-      └── base_link
-           ├── laser
-           ├── imu_link
-           ├── camera_link
-           │     └── camera_depth_frame
-           ├── left_wheel
-           └── right_wheel
+      └── base_footprint          (EKF publishes odom → base_footprint)
+           └── base_link          (URDF fixed joint: base_footprint → base_link)
+                ├── laser
+                ├── imu_link
+                ├── camera_link
+                │     └── camera_depth_frame
+                ├── front_left_wheel
+                ├── front_right_wheel
+                ├── rear_left_wheel
+                └── rear_right_wheel
 ```
 
-`map → odom → base_link` is the foundation. Do not break this chain.
+`map → odom → base_footprint → base_link` is the foundation. Do not break this chain.
 
 ---
 
