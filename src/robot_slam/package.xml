@@ -4,7 +4,7 @@
   <name>robot_slam</name>
   <version>0.1.0</version>
   <description>SLAM configuration and launch files. Current: slam_toolbox (2D). Future: RTAB-Map (RGB-D).</description>
-  <maintainer email="placeholder@example.com">robot</maintainer>
+  <maintainer email="35791110+Dasovon@users.noreply.github.com">Dasovon</maintainer>
   <license>MIT</license>
 
   <exec_depend>slam_toolbox</exec_depend>

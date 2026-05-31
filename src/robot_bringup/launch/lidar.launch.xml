@@ -1,14 +1,9 @@
 <launch>
   <!-- RPLidar A1 M8 — publishes /scan at ~5.5 Hz, frame_id=laser
        Device: /dev/rplidar (udev symlink, CP210x VID 10c4:ea60)
-       Baudrate: 115200 (A1 default)
-       Angle compensation: enabled for uniform angular spacing -->
+       Parameters: config/lidar.yaml -->
 
   <node pkg="rplidar_ros" exec="rplidar_composition" output="screen">
-    <param name="serial_port"      value="/dev/rplidar"/>
-    <param name="serial_baudrate"  value="115200"/>
-    <param name="frame_id"         value="laser"/>
-    <param name="angle_compensate" value="true"/>
-    <param name="scan_mode"        value="Standard"/>
+    <param from="$(find-pkg-share robot_bringup)/config/lidar.yaml"/>
   </node>
 </launch>

@@ -16,9 +16,9 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='robot',
-    maintainer_email='placeholder@example.com',
-    description='USB serial bridge between Raspberry Pi 5 and ESP32-S3',
+    maintainer='Dasovon',
+    maintainer_email='35791110+Dasovon@users.noreply.github.com',
+    description='Pi-side battery publisher and low-voltage protection node (INA219 on Pi I2C-1)',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

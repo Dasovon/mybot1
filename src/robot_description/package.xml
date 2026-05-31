@@ -4,7 +4,7 @@
   <name>robot_description</name>
   <version>0.1.0</version>
   <description>URDF robot model, meshes, and static TF transforms defining the robot geometry and sensor placements.</description>
-  <maintainer email="placeholder@example.com">robot</maintainer>
+  <maintainer email="35791110+Dasovon@users.noreply.github.com">Dasovon</maintainer>
   <license>MIT</license>
 
   <depend>urdf</depend>

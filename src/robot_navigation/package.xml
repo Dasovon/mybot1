@@ -4,7 +4,7 @@
   <name>robot_navigation</name>
   <version>0.1.0</version>
   <description>Nav2 configuration, costmap parameters, and navigation launch files.</description>
-  <maintainer email="placeholder@example.com">robot</maintainer>
+  <maintainer email="35791110+Dasovon@users.noreply.github.com">Dasovon</maintainer>
   <license>MIT</license>
 
   <exec_depend>nav2_bringup</exec_depend>
