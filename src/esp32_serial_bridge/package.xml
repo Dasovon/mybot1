@@ -3,16 +3,13 @@
 <package format="3">
   <name>esp32_serial_bridge</name>
   <version>0.1.0</version>
-  <description>USB serial bridge between Raspberry Pi and ESP32-S3. Publishes sensor telemetry as ROS 2 topics and forwards cmd_vel as velocity commands.</description>
+  <description>Pi-side battery publisher: reads INA219 on Pi I2C-1, publishes /battery_state at 1 Hz, and enforces low-voltage cutoff via zero cmd_vel. twist_mux priority arbitration required before powered Nav2 motion testing.</description>
   <maintainer email="35791110+Dasovon@users.noreply.github.com">Dasovon</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>
-  <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>robot_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
