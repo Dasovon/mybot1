@@ -4,6 +4,7 @@ import threading
 import time
 
 from esp32_serial_bridge.battery_guard import BatteryGuard
+from esp32_serial_bridge.shutdown_timer import ShutdownTimer
 from geometry_msgs.msg import Twist
 from ina219 import INA219
 import rclpy
@@ -112,6 +113,7 @@ class BatteryPublisherNode(Node):
             cutoff_voltage=BAT_CUTOFF_V,
             recovery_voltage=BAT_RECOVER_V,
         )
+        self._shutdown_timer = ShutdownTimer(shutdown_after_s=SHUTDOWN_AFTER_S)
         self._cutoff_since = None  # monotonic time when cutoff began
 
         self.create_timer(1.0 / PUBLISH_HZ, self._publish_battery)
@@ -154,6 +156,7 @@ class BatteryPublisherNode(Node):
 
         elif decision.recovered:
             self._cutoff_since = None
+            self._shutdown_timer.update(in_cutoff=False, elapsed_s=0.0)
             self.get_logger().warn(
                 f'Battery recovered to {voltage:.2f} V — resuming normal operation.')
 
@@ -163,7 +166,7 @@ class BatteryPublisherNode(Node):
                 f'Battery cutoff active: {voltage:.2f} V  ({elapsed:.0f}s)',
                 throttle_duration_sec=5.0)
 
-            if elapsed >= SHUTDOWN_AFTER_S:
+            if self._shutdown_timer.update(in_cutoff=True, elapsed_s=elapsed):
                 self.get_logger().error(
                     f'Battery below cutoff for {SHUTDOWN_AFTER_S}s — initiating shutdown.')
                 subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])

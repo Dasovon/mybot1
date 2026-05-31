@@ -26,9 +26,16 @@ def test_lidar_config_has_required_parameters():
     assert params['scan_mode'] == 'Standard'
 
 
-def test_ekf_config_exists_and_has_parameters():
+def test_ekf_config_preserves_fusion_contract():
     data = _load_yaml('ekf.yaml')
-    assert data, 'ekf.yaml must not be empty'
+    params = data['ekf_filter_node']['ros__parameters']
+
+    assert params['frequency'] == 20.0
+    assert params['two_d_mode'] is True
+    assert params['odom0'] == '/diff_cont/odom'
+    assert params['imu0'] == '/imu/imu'
+    assert params['odom_frame'] == 'odom'
+    assert params['base_link_frame'] == 'base_footprint'
 
 
 def test_realsense_config_exists_and_has_parameters():
