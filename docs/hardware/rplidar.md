@@ -76,37 +76,22 @@ ros2 topic hz /scan                       # expect ~5.5 Hz
 ros2 topic echo /scan --once | head -30   # ranges must be non-zero, non-inf
 ```
 
-### Motor control — verified behavior
+### Motor control — software shutdown not reliable on this adapter
 
-The RPLidar A1 motor is controlled through the CP2102 USB adapter's DTR line.
+**Tested on this build (2026-05-31):** DTR and RTS control through the CP2102 adapter (`/dev/ttyUSB1`, VID 10c4 / PID ea60) was tested exhaustively. Software motor shutdown is not reliable on this hardware.
 
-**Tested on this build (2026-05-31):**
-
-| Serial state | Motor behavior |
+| Test | Result |
 |---|---|
-| `DTR=False, RTS=False` | **Stopped** |
-| `DTR=True,  RTS=False` | Running |
-| `DTR=False, RTS=True`  | **Stopped** |
-| `DTR=True,  RTS=True`  | Running |
+| Steady `DTR=False` while port held open | No effect — motor kept spinning |
+| Explicit `DTR=True → DTR=False` transition while port held open | No effect — motor kept spinning |
+| `DTR=True` applied | Brief transient stop (~1 s) then motor resumed |
+| Port released (no owner) | Motor keeps spinning |
 
-RTS has no observed effect. `DTR=False` stops the motor; `DTR=True` runs it.
+The motor is powered from USB 5V and appears to run continuously whenever USB power is connected, regardless of the DTR/RTS state presented by the adapter.
 
-When `/dev/rplidar` is released and the port closes, the CP2102 reverts to the motor-running state. Stopping `mybot-lidar.service` alone stops `/scan` publishing but does not physically stop the motor.
+**Current behavior:** Stopping `mybot-lidar.service` halts `/scan` publishing and shuts down the ROS driver. The physical motor may continue spinning.
 
-**Implemented solution:** `mybot-lidar-motor-off.service` runs `lidar_motor_off.py`, which persistently holds `/dev/rplidar` open with `DTR=False` whenever the ROS LiDAR driver is not active. The two services conflict — starting one stops the other.
-
-| Mode | Active service | Motor | `/scan` |
-|---|---|---|---|
-| Bench / idle | `mybot-lidar-motor-off.service` | Off | Not publishing |
-| SLAM / scan | `mybot-lidar.service` | Running | Publishing |
-
-```bash
-# Start scanning (stops motor-off holder automatically via Conflicts=):
-sudo systemctl start mybot-lidar.service
-
-# Return to motor-off idle (ExecStopPost on mybot-lidar.service handles this):
-sudo systemctl stop mybot-lidar.service
-```
+**Reliable motor stop:** Unplug the LiDAR USB cable, or use a hardware USB power switch. A switched 5V path (load switch or USB hub with per-port power switching via `uhubctl`) controlled by a Pi GPIO is the correct long-term fix but has not been implemented.
 
 ---
 

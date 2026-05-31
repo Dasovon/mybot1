@@ -18,7 +18,6 @@ SERVICES=(
     mybot-health.service
     robot-launch.service
     mybot-lidar.service
-    mybot-lidar-motor-off.service
 )
 
 echo "=== mybot1 service deployment ==="
@@ -63,7 +62,7 @@ done
 echo ""
 echo "[4] Starting services"
 echo "  Note: mybot-lidar.service is NOT auto-started — run 'sudo systemctl start mybot-lidar.service' when LiDAR is needed"
-for svc in microros-agent.service mybot-battery.service mybot-display.service robot-launch.service mybot-lidar-motor-off.service; do
+for svc in microros-agent.service mybot-battery.service mybot-display.service robot-launch.service; do
     if systemctl cat "${svc}" >/dev/null 2>&1; then
         sudo systemctl restart "$svc" && echo "  started: ${svc}" || echo "  WARN: ${svc} failed to start"
     fi
