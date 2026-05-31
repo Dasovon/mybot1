@@ -43,6 +43,7 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
 
     while True:
+        s.dtr = False  # reassert each second — resilient against unexpected state changes
         time.sleep(1)
 
 

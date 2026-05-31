@@ -1,6 +1,7 @@
 [Unit]
 Description=RPLidar A1 motor off — holds DTR=False to stop motor when LiDAR ROS node is not running
-After=network.target
+After=robot-launch.service
+Requires=robot-launch.service
 Conflicts=mybot-lidar.service
 
 [Service]
